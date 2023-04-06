@@ -46,7 +46,7 @@ One fallout of the near-infinite variability of code performance is that the exa
 
 Thanks to the combined efforts of the cycle-eaters, it's more true than ever that there's no such thing as a single "true" execution time for a given instruction. As you'll recall, I said that in the last chapter. Why do I keep bringing it up? Because I don't want you to look at the times reported by our tests of 1000 repetitions of the same instruction and think that those times are the true execution times of that instruction—they aren't, any more than the official cycle times in Appendix A are the true times. *There is no such thing as a true execution time on the 8088.* There are only execution times in context.
 
-Do you remember the varying performances of `shr`{.nasm} in different contexts in Chapter 4? Well, that was just for repeated instances of one or two instructions. Imagine how much variation cycle-eaters could induce in the performance of a sequence of ten or twenty different instructions, especially if some of the instructions accessed word-sized display memory operands. You should always bear in mind that the times reported by the Zen timer are accurate only for the particular code sequence you've timed, not for all instances of a given instruction in all code sequences.
+Do you remember the varying performances of `shr` in different contexts in Chapter 4? Well, that was just for repeated instances of one or two instructions. Imagine how much variation cycle-eaters could induce in the performance of a sequence of ten or twenty different instructions, especially if some of the instructions accessed word-sized display memory operands. You should always bear in mind that the times reported by the Zen timer are accurate only for the particular code sequence you've timed, not for all instances of a given instruction in all code sequences.
 
 There's just no way around it: *you must measure the performance of your code to know how fast it is.* Yes, I know—it would be awfully nice just to be able to look up instruction execution times and be done with it. That's not the way the 8088 works, though—and the odd architecture of the 8088 is what the Zen of assembler is all about.
 
@@ -58,7 +58,46 @@ A third reason is simple curiosity. We'll spend most of this book measuring inst
 
 ### The Test Set-Up
 
-The code we'll observe is shown in [Listing 5-1](#listing-5-1). This code is an endless loop in which the value stored in the variable `i`{.nasm} is copied to the variable `j`{.nasm} over and over by way of AH. The `DS:`{.nasm} override prefixes on the variables, while not required, make it clear that both variables are accessed by way of DS.
+#### Listing 5-1
+```
+;
+; *** Listing 5-1 ***
+;
+; Copies a byte via AH endlessly, for the purpose of
+; illustrating the complexity of a complete understanding
+; of even the simplest instruction sequence on the PC.
+;
+; Note: This program is an endless loop, and never exits!
+;
+; Compile and link as a standalone program; not intended
+; for use with the Zen timer.
+;
+mystack	segment	para stack 'STACK'
+	db	512 dup(?)
+mystack	ends
+;
+Code	segment word public 'CODE'
+	assume	cs:Code, ds:Code
+Start	proc	near
+	push	cs
+	pop	ds
+	jmp	Skip
+;
+i	db	1
+j	db	0
+;
+Skip:
+	rept	1000
+	mov	ah,ds:[i]
+	mov	ds:[j],ah
+	endm
+	jmp	Skip
+Start	endp
+Code	ends
+	end	Start
+```
+
+The code we'll observe is shown in [Listing 5-1](#listing-5-1). This code is an endless loop in which the value stored in the variable `i` is copied to the variable `j` over and over by way of AH. The `DS:` override prefixes on the variables, while not required, make it clear that both variables are accessed by way of DS.
 
 The detailed performance of the code in [Listing 5-1](#listing-5-1) was monitored with the logic analyzer capability of the OmniLab multipurpose electronic test instrument manufactured by Orion Instruments. (Not coincidentally, I was part of the team that developed the OmniLab software.) OmniLab's probes were hooked up to a PC's 8088 and bus, [Listing 5-1](#listing-5-1) was started, and a snapshot of code execution was captured and studied.
 
@@ -68,11 +107,17 @@ The following lines of the 8088 were monitored with OmniLab: the 16 lines that c
 
 Odds are that you, the reader, are not a hardware engineer. After all, this *is* a book about software, however far it may seem to stray at times. Consequently, I'm not going to show the execution of [Listing 5-1](#listing-5-1) in the form of the timing diagrams of which hardware engineers are so fond. Timing diagrams are fine for observing the state of a single line, but are hard to follow at an overall level, which is precisely what we want to see. Instead, I've condensed the information I collected with OmniLab into an event time-line, shown in Figure 5.1.
 
-![**Figure 5.1** A timeline showing 170 cycles during the execution of the code in Listing 5-1. This figure illustrates the interleaving of instruction fetches, transfers of instruction bytes to the execution unit, and access to memory operands that routinely occurs during the execution of 8088 code. Various cycle eaters cause each of the two instructions (`mov ah,ds:[i]`{.nasm} and `mov ds:[j],ah`{.nasm}) to execute at different times. Note that the sequence of events repeats at cycle 144.](images/fig5.1aRT.png)
+![Description](../images/fig5.1aRT.png)
 
-![**Figure 5.1** *(Continued)*](images/fig5.1bRT.png)
+**Figure 5.1** A timeline showing 170 cycles during the execution of the code in Listing 5-1. This figure illustrates the interleaving of instruction fetches, transfers of instruction bytes to the execution unit, and access to memory operands that routinely occurs during the execution of 8088 code. Various cycle eaters cause each of the two instructions (`mov ah,ds:[i]` and `mov ds:[j],ah`) to execute at different times. Note that the sequence of events repeats at cycle 144.
 
-![**Figure 5.1** *(Continued)*](images/fig5.1cRT.png)
+![Description](../images/fig5.1bRT.png)
+
+**Figure 5.1** *(Continued)*
+
+![Description](../images/fig5.1cRT.png)
+
+**Figure 5.1** *(Continued)*
 
 ### The Results
 
@@ -88,33 +133,39 @@ The first thing that surely strikes you about Figure 5.1 is that it's awfully te
 
 The next notable aspect of Figure 5.1 is that you can truly see the two parts of the 8088—the Execution Unit and the Bus Interface Unit—coprocessing. The left side of the time-line shows the times at which the EU receives instruction bytes to execute, indicating the commencement and continuation of instruction execution. The right side of the time-line shows the times at which the BIU reads or writes bytes from or to memory, indicating instruction fetches and accesses to memory operands.
 
-The two sides of the time-line overlap considerably. For example, at cycle 10 the EU receives the opcode byte of `mov ds:[j],ah`{.nasm} from the prefetch queue at the same time that the BIU prefetches the *mod-reg-rm* byte for the same instruction. (We'll discuss *mod-reg-rm* bytes in detail in Chapter 7.) Clearly, the two parts of the 8088 are processing independently during cycle 10.
+The two sides of the time-line overlap considerably. For example, at cycle 10 the EU receives the opcode byte of `mov ds:[j],ah` from the prefetch queue at the same time that the BIU prefetches the *mod-reg-rm* byte for the same instruction. (We'll discuss *mod-reg-rm* bytes in detail in Chapter 7.) Clearly, the two parts of the 8088 are processing independently during cycle 10.
 
-The EU and BIU aren't always able the process independently, however. The EU spends a considerable amount of time waiting for the BIU to provide the next instruction byte, thanks to the prefetch queue cycle-eater. This is apparent during cycles 129 through 135, where the EU must wait 6 cycles for the *mod-reg-rm* byte of `mov ah,ds:[i]`{.nasm} to arrive. Back at cycle 84, the EU only had to wait 1 cycle for the same byte to arrive. Why the difference?
+The EU and BIU aren't always able the process independently, however. The EU spends a considerable amount of time waiting for the BIU to provide the next instruction byte, thanks to the prefetch queue cycle-eater. This is apparent during cycles 129 through 135, where the EU must wait 6 cycles for the *mod-reg-rm* byte of `mov ah,ds:[i]` to arrive. Back at cycle 84, the EU only had to wait 1 cycle for the same byte to arrive. Why the difference?
 
-The difference is the result of the DRAM refresh that occurred at cycle 118, preempting the bus and delaying prefetching so that the *mod-reg-rm* byte of `mov ah,ds:[i]`{.nasm} wasn't available until cycle 135. What's particularly interesting is that this variation occurs even though the sequence of instructions is exactly the same at cycle 83 as at cycle 129. In this case, it's the DRAM refresh cycle-eater that causes identical instructions in identical code sequences to execute at different speeds. Another time, it might be the display adapter cycle-eater that causes the variation, or the prefetch queue cycle-eater, or a combination of the three. This is an important lesson in the true nature of code execution: *the same instruction sequence may execute at different speeds at different times.*
+The difference is the result of the DRAM refresh that occurred at cycle 118, preempting the bus and delaying prefetching so that the *mod-reg-rm* byte of `mov ah,ds:[i]` wasn't available until cycle 135. What's particularly interesting is that this variation occurs even though the sequence of instructions is exactly the same at cycle 83 as at cycle 129. In this case, it's the DRAM refresh cycle-eater that causes identical instructions in identical code sequences to execute at different speeds. Another time, it might be the display adapter cycle-eater that causes the variation, or the prefetch queue cycle-eater, or a combination of the three. This is an important lesson in the true nature of code execution: *the same instruction sequence may execute at different speeds at different times.*
 
 ### When Does an Instruction Execute?
 
 One somewhat startling aspect of Figure 5.1 is that it makes it clear that there is no such thing as the time interval during which a given instruction—and only that instruction—executes. There is the time at which a given byte of an instruction is prefetched, there is a time at which a given byte of an instruction is sent to the EU, and there is a time at which each memory operand byte of an instruction is accessed. None of those times really marks the start or end of an instruction, though, and the instruction fetches and memory accesses of one instruction usually overlap those of other instructions.
 
-![**Figure 5.2** An illustration of the overlap of instruction execution in the 8088. This figure summarizes the information in Figure 5.1 to show the period of time during which each instruction occupies the attention of at least some part of the 8088 by involvement in instruction fetching, execution, or accesses to a memory operand. It's inappropriate to count the full time shown for an instruction as that instruction's execution time; times during which instructions overlap should be chared to only one instruction, because the 8088 increases overall performance at those times by coprocessing. Note that bus accesses are assumed to start 2 cycles before the cycle after which the /MEMR or /MEMW line becomes inactive, since bus cycles take 4 cycles in all. As a result, the bus access start times shown may be off by a cycle, but the implications of this figure remain the same regardless.](images/fig5.2RT.png)
+![Description](../images/fig5.2RT.png)
+
+**Figure 5.2** An illustration of the overlap of instruction execution in the 8088. This figure summarizes the information in Figure 5.1 to show the period of time during which each instruction occupies the attention of at least some part of the 8088 by involvement in instruction fetching, execution, or accesses to a memory operand. It's inappropriate to count the full time shown for an instruction as that instruction's execution time; times during which instructions overlap should be chared to only one instruction, because the 8088 increases overall performance at those times by coprocessing. Note that bus accesses are assumed to start 2 cycles before the cycle after which the /MEMR or /MEMW line becomes inactive, since bus cycles take 4 cycles in all. As a result, the bus access start times shown may be off by a cycle, but the implications of this figure remain the same regardless.
 
 Figure 5.2 illustrates the full range of action of each of the instructions in Figure 5.1. (In Figure 5.2, and in Figure 5.3 as well, the two sides of the time-line are equivalent; there is no specific meaning to text on, say, the left side as there is in Figure 5.1. I simply alternate sides in order to keep one instruction from running into the next.)
 
-For example, at cycle 143 the last instruction byte of `mov ah,ds:[i]`{.nasm} is sent to the EU. At cycle 144 the opcode of the next instruction, `mov ds:[j],ah`{.nasm}, is prefetched. Not until cycle 150 is the operand of `mov ah,ds:[i]`{.nasm} read, and not until cycle 154 is the opcode byte of `mov ds:[j],ah`{.nasm} sent to the EU. Which instruction is executing between cycles 143 and 154?
+For example, at cycle 143 the last instruction byte of `mov ah,ds:[i]` is sent to the EU. At cycle 144 the opcode of the next instruction, `mov ds:[j],ah`, is prefetched. Not until cycle 150 is the operand of `mov ah,ds:[i]` read, and not until cycle 154 is the opcode byte of `mov ds:[j],ah` sent to the EU. Which instruction is executing between cycles 143 and 154?
 
 It's easiest to consider execution to start when the opcode byte of an instruction is sent to the EU and end when the opcode byte of the next instruction is sent to the EU, as shown in Figure 5.3.
 
-![**Figure 5.3** The effective overall execution times of the instructions shown in Figure 5.1. This figure summarizes the information in Figure 5.1 to show the time each instruction takes to execute, as measured starting at the cycle during which each instruction's opcode byte is sent to the EU and ending with the cycle after which the following instruction's opcode byte is sent to the EU. Note that, thanks to the DRAM refresh and prefetch queue cycle eaters, each of the three executions of `mov ah,ds:[i]`{.nasm} takes a different number of cycles from start to finish, likewise, only two of the three executions of `mov ds:[j],ah`{.nasm} execute at the same speed. This clearly illustrates why the concept of a single "true" execution time for a given instruction is unworkable on the PC.](images/fig5.3aRT.png)
+![Description](images/fig5.3aRT.png)
 
-Under this approach, the current instruction is charged with any instruction fetch time for the opcode byte of the next instruction that isn't overlapped with EU execution of the current instruction. This is consistent with our conclusion in Chapter 4 that execution time is, practically speaking, EU execution time plus any instruction fetch time that's not overlapped with the EU execution time of another instruction. Therefore, `mov ah,ds:[i]`{.nasm} executes during cycles 129 through 153.r
+**Figure 5.3** The effective overall execution times of the instructions shown in Figure 5.1. This figure summarizes the information in Figure 5.1 to show the time each instruction takes to execute, as measured starting at the cycle during which each instruction's opcode byte is sent to the EU and ending with the cycle after which the following instruction's opcode byte is sent to the EU. Note that, thanks to the DRAM refresh and prefetch queue cycle eaters, each of the three executions of `mov ah,ds:[i]` takes a different number of cycles from start to finish, likewise, only two of the three executions of `mov ds:[j],ah` execute at the same speed. This clearly illustrates why the concept of a single "true" execution time for a given instruction is unworkable on the PC.
 
-![**Figure 5.3** *(Continued)*](images/fig5.3bRT.png)
+Under this approach, the current instruction is charged with any instruction fetch time for the opcode byte of the next instruction that isn't overlapped with EU execution of the current instruction. This is consistent with our conclusion in Chapter 4 that execution time is, practically speaking, EU execution time plus any instruction fetch time that's not overlapped with the EU execution time of another instruction. Therefore, `mov ah,ds:[i]` executes during cycles 129 through 153.r
 
-In truth, though, the first hint of `mov ah,ds:[i]`{.nasm} occurs at cycle 122, when the opcode byte is fetched. In fact, since read accesses to memory take 4 cycles, the 8088 must have begun fetching the opcode byte earlier still. Figure 5.2 assumes that the 8088 starts bus accesses 2 cycles before the cycle during which /MEMR or /MEMW becomes inactive. That assumption may be off by a cycle, but none of our conclusions would be altered if that were the case. Consequently, the instruction **mov ah,ds:[i]** occupies the attention of at least some part of the 8088 from around cycle 120 up through cycle 153, or 34 cycles, as shown in Figure 5.2.
+![Description](../images/fig5.3bRT.png)
 
-Figure 5.3 shows that `mov ah,ds:[i]`{.nasm} doesn't take 34 cycles to execute, however. The instruction fetching that occurs during cycles 120 through 128 is overlapped with the execution of the preceding instruction, so those cycles aren't counted against the execution time of `mov ah,ds:[i]`{.nasm}. The instruction does take 25 cycles to execute, though, illustrating the power of the cycle-eaters: according to Appendix A, `mov ah,ds:[i]`{.nasm} should execute in 14 cycles, so just two of the cycle-eaters, the prefetch queue and DRAM refresh, have nearly doubled the actual execution time of the instruction in this context.
+**Figure 5.3** *(Continued)*
+
+In truth, though, the first hint of `mov ah,ds:[i]` occurs at cycle 122, when the opcode byte is fetched. In fact, since read accesses to memory take 4 cycles, the 8088 must have begun fetching the opcode byte earlier still. Figure 5.2 assumes that the 8088 starts bus accesses 2 cycles before the cycle during which /MEMR or /MEMW becomes inactive. That assumption may be off by a cycle, but none of our conclusions would be altered if that were the case. Consequently, the instruction **mov ah,ds:[i]** occupies the attention of at least some part of the 8088 from around cycle 120 up through cycle 153, or 34 cycles, as shown in Figure 5.2.
+
+Figure 5.3 shows that `mov ah,ds:[i]` doesn't take 34 cycles to execute, however. The instruction fetching that occurs during cycles 120 through 128 is overlapped with the execution of the preceding instruction, so those cycles aren't counted against the execution time of `mov ah,ds:[i]`. The instruction does take 25 cycles to execute, though, illustrating the power of the cycle-eaters: according to Appendix A, `mov ah,ds:[i]` should execute in 14 cycles, so just two of the cycle-eaters, the prefetch queue and DRAM refresh, have nearly doubled the actual execution time of the instruction in this context.
 
 ## The True Nature of Instruction Execution
 
@@ -124,13 +175,15 @@ Unfortunately, assembler itself tests the limits of human comprehension of proce
 
 And that is yet another reason why an understanding of code performance at the level shown in Figure 5.1 isn't desirable.
 
-![**Figure 5.3** *(Continued)*](images/fig5.3cRT.png)
+![Description](../images/fig5.3cRT.png)
+
+**Figure 5.3** *(Continued)*
 
 ### Variability
 
-This brings us to an excellent illustration of the variability of performance, even for the same instruction in the same code sequence executing at different times. As we just discovered, the `mov ah,ds:[i]`{.nasm} instruction that starts at cycle 129 takes 25 cycles to execute. However, the same instruction starting at cycle 33 takes 27 cycle to execute. Starting at cycle 83, `mov ah,ds:[i]`{.nasm} takes just 21 cycles to execute. *That's three significantly different times for the same instruction executing in the same instruction sequence!*
+This brings us to an excellent illustration of the variability of performance, even for the same instruction in the same code sequence executing at different times. As we just discovered, the `mov ah,ds:[i]` instruction that starts at cycle 129 takes 25 cycles to execute. However, the same instruction starting at cycle 33 takes 27 cycle to execute. Starting at cycle 83, `mov ah,ds:[i]` takes just 21 cycles to execute. *That's three significantly different times for the same instruction executing in the same instruction sequence!*
 
-How can this be? In this case it's the DRAM refresh cycle-eater that's stirring things up by periodically holding up 8088 bus accesses for 4 cycles or more. This alters the 8088's prefetching and memory access sequence, with a resultant change in execution time. As we discussed earlier, the DRAM refresh read at cycle 118 takes up valuable bus access time, keeping the 8088 from fetching the *mod-reg-rm* byte of `mov ah,ds:[i]`{.nasm} ahead of time and thereby pushing the succeeding bus accesses a few cycles later in time.
+How can this be? In this case it's the DRAM refresh cycle-eater that's stirring things up by periodically holding up 8088 bus accesses for 4 cycles or more. This alters the 8088's prefetching and memory access sequence, with a resultant change in execution time. As we discussed earlier, the DRAM refresh read at cycle 118 takes up valuable bus access time, keeping the 8088 from fetching the *mod-reg-rm* byte of `mov ah,ds:[i]` ahead of time and thereby pushing the succeeding bus accesses a few cycles later in time.
 
 The DRAM refresh and display adapter cycle-eaters can cause almost any code sequence to vary in much the same way over time. That's why the Zen timer reports fractional times. It is also the single most important reason why a micro-analysis of code performance of the sort done in Figure 5.1 is not only expensive and time-consuming but also pointless. If a given instruction following the same sequence of instructions can vary in performance by 20%, 50%, 100% or even more from one execution to the next, what sort of performance number can you give that instruction other than as part of the overall instruction sequence? What point is there in trying to understand the instruction's exact performance during any one of those executions?
 
@@ -146,7 +199,7 @@ Also, only two of the four cycle-eaters are active in Figure 5.1. Since [Listing
 
 Worse still, in the real world interrupts occur often and asynchronously, flushing the prefetch queue and often changing the fetching, execution, and memory operand access patterns of whatever code happens to be running. Most notable among these interrupts is the timer interrupt, which occurs every 54.9 ms. Because the timer interrupt may occur after any instruction and doesn't always take the same amount of time, it can cause execution to settle into new patterns. For example, after I captured the sequence shown in Figure 5.1 I took another snapshot of the execution of [Listing 5-1](#listing-5-1). *The second snapshot did not match the first.* The timer interrupt had kicked execution into a different pattern, in which the same instructions were executed, with the same results—but not at exactly the same speeds.
 
-Other interrupts, such as those from keyboards, mice, and serial ports, can similarly alter program performance. Of course, interrupts and cycle-eaters don't change the *effects* of code—`add ax,1`{.nasm} always adds 1 to AX, and so on—but they can drastically change the performance of a given instruction in a given context. That's why we focus on the overall performance of code sequences in context, as measured with the Zen timer, rather than on the execution times of individual instructions.
+Other interrupts, such as those from keyboards, mice, and serial ports, can similarly alter program performance. Of course, interrupts and cycle-eaters don't change the *effects* of code—`add ax,1` always adds 1 to AX, and so on—but they can drastically change the performance of a given instruction in a given context. That's why we focus on the overall performance of code sequences in context, as measured with the Zen timer, rather than on the execution times of individual instructions.
 
 ### The Longer the Better
 
