@@ -21,7 +21,7 @@ The major cycle-eaters are:
 
 The locations of these cycle-eaters in the PC are shown in Figure 4.1. We'll cover each of the cycle-eaters in turn in this chapter. The material won't be easy, since cycle-eaters are among the most subtle aspects of assembler programming. By the same token, however, this will be one of the most important and rewarding chapters in this book. Don't worry if you don't catch everything in this chapter, but do read it all even if the going gets a bit tough. Cycle-eaters play a key role in later chapters, so some familiarity with them is highly desirable. Then, too, those later chapters illustrate cycle-eaters in action, which should help clear up any aspects of cycle-eaters about which you're uncertain.
 
-[Description](../images/fig4.1RT.png)
+![Description](../images/fig4.1RT.png)
 
 **Figure 4.1** The locations of the major cycle eaters in the IBM PC. Note that all the cycle eaters are external to the execution unit of the 8088.
 
@@ -35,7 +35,7 @@ Fans of the 8088 call it a 16-bit processor. Fans of other 16-bit processors cal
 
 As we saw in Chapter 3, the 8088 is internally a full 16-bit processor, equivalent to an 8086. In terms of the instruction set, the 8088 is clearly a 16-bit processor, capable of performing any given 16-bit operation—addition, subtraction, even multiplication or division—with a single instruction. Externally, however, the 8088 is unequivocally an 8-bit processor, since the external data bus is only 8 bits wide. In other words, the programming interface is 16 bits wide, but the hardware interface is only 8 bits wide, as shown in Figure 4.2. The result of this mismatch is simple: word-sized data can be transferred between the 8088 and memory or peripherals at only one-half the maximum rate of the 8086, which is to say one-half the maximum rate for which the Execution Unit of the 8088 was designed.
 
-[Description](../images/fig4.2RT.png)
+![Description](../images/fig4.2RT.png)
 
 **Figure 4.2** Internally the 8088 is a 16-bit microprocessor, but externally the 8088 is only an 8-bit microprocessor.
 
@@ -267,13 +267,13 @@ For example, consider the code in [Listings 4-5](#listing-4-5) and [4-6](#listin
 	call	ZTimerOff
 ```
 
-[Description](../images/fig4.3RT.png)
+![Description](../images/fig4.3RT.png)
 
 **Figure 4.3**
 
 Now let's examine [Listing 4-6](#listing-4-6). Here each `shr` follows a `mul` instruction. Since `mul` instructions take so long to execute that the prefetch queue is always full when they finish, each `shr` should be ready and waiting in the prefetch queue when the preceding `mul` ends. As a result, we'd expect that each `shr` would execute in 2 cycles; together with the 118 cycle execution time of multiplying 0 times 0, the total execution time should come to 120 cycles per `shr`/`mul` pair, as shown in Figure 4.4. And, by God, when we run [Listing 4-6](#listing-4-6) we get an execution time of 25.14 us per `shr`/`mul` pair, or *exactly* 120 cycles! According to these results, the "true" execution time of `shr` would seem to be 2 cycles, quite a change from the conclusion we drew from [Listing 4-5](#listing-4-5).
 
-[Description](../images/fig4.4RT.png)
+![Description](../images/fig4.4RT.png)
 
 **Figure 4.4** Execution unit time determines the overall execution time of a sequence of slow instructions, such as `mul`, because such a sequence allows the prefetch queue to stay well stocked with instruction bytes in this example. Overall execution time exactly matches execution unit execution time, and the prefetch queue cycle eater has no effect. This figure is for illustrative purposes only, and is not intended to show the exect timings of 8088 operations.
 
@@ -377,7 +377,7 @@ just about the desired 4 ms time I mentioned earlier. (Only the first 640 Kb of 
 
 Don't sweat the details here. The important point is this: for at least 4 out of every 72 cycles, the PC's bus is given over to DRAM refresh and is not available to the 8088, as shown in Figure 4.5. That means that as much as 5.56% of the PC's already inadequate bus capacity is lost. However, DRAM refresh doesn't necessarily stop the 8088 for 4 cycles. The Execution Unit of the 8088 can keep processing while DRAM refresh is occurring, unless the EU needs to access memory. Consequently, DRAM refresh can slow code performance anywhere from 0% to 5.56% (and actually a bit more, as we'll see shortly), depending on the extent to which DRAM refresh occupies cycles during which the 8088 would otherwise be accessing memory.
 
-[Description](../images/fig4.5RT.png)
+![Description](../images/fig4.5RT.png)
 
 **Figure 4.5** The PC's bus is given over to providing dynamic RAM (DRAM) refresh for at least 4 cycles out of every 72 cycles.
 
@@ -447,7 +447,7 @@ Wait states are cycles during which a bus access by the 8088 to a device on the 
 
 Wait states exist because the 8088 must to be able to coexist with any adapter, no matter how slow (within reason). The 8088 expects to be able to complete each bus access—a memory or I/O read or write—in 4 cycles, but adapters can't always respond that quickly, for a number of reasons. For example, display adapters must split access to display memory between the 8088 and the circuitry that generates the video signal based on the contents of display memory, so they often can't immediately fulfill a request by the 8088 for a display memory read or write. To resolve this conflict, display adapters can tell the 8088 to wait during bus accesses by inserting one or more wait states, as shown in Figure 4.6. The 8088 simply sits and idles as long as wait states are inserted, then completes the access as soon as the display adapter indicates its readiness by no longer inserting wait states. The same would be true of any adapter that couldn't keep up with the 8088.
 
-[Description](../images/fig4.6RT.png)
+![Description](../images/fig4.6RT.png)
 
 **Figure 4.6** Both the video circuitry and the 8088 often try to access display memory at the same time. Display adapters resolve such conflicts by holding up 8088 accesses with wait states until the video circuitry no longer needs to access display memory. This figure is for illustrative purposes only, and is not intended to show the exact timings of 8088 operations.
 
@@ -471,13 +471,13 @@ It matters a great deal which master is more important, for while both the 8088 
 
 It turns out that the 8088 has to do a lot of waiting, for three reasons. First, the video circuitry can take as much as about 90% of the available display memory access time, as shown in Figure 4.7, leaving as little as about 10% of all display memory accesses for the 8088. (These percentages vary considerably among the many EGA and VGA clones.)
 
-[Description](../images/fig4.7RT.png)
+![Description](../images/fig4.7RT.png)
 
 **Figure 4.7** The video circuitry, which scans display memory for pixel data, can take as much as 90 percent of available display memory access time, leaving as little as about 10 percent of all display memory access free for the use of the 8088.
 
 Second, because dots (or *pixels*, short for "picture elements") must be drawn on the screen at a constant speed, display adapters can provide memory accesses only at fixed intervals. As a result, time can be lost while the 8088 synchronizes with the start of the next display adapter memory access, even if the video circuitry isn't accessing display memory at that time, as shown in Figure 4.8.
 
-[Description](../images/fig4.8RT.png)
+![Description](../images/fig4.8RT.png)
 
 **Figure 4.8** Accesses to display memory are available only at fixed intervals and are of fixed lengths. Both the intervals and the lengths are controlled by the display adapter, and are the same regardless of the speed of the computer in which the display adapter is installed. This figure is for illustrative purposes only, and is not intended to show the exact timings of 8088 operations.
 
