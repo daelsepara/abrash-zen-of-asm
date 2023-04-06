@@ -236,7 +236,7 @@ SumLoop:
 Compare the code within the inner loop above to that in the inner loop of the previous version of this example—the difference is striking. This inner loop is every bit as tight as that of the code for handling blocks 64 Kb-and-less in size; in fact, it's slightly *tighter*, as `jnz` is faster than `loop`. Consequently, there shouldn't be much difference in performance between the last example and the 64 Kb and less version. Nonetheless, a basic rule of the Zen of assembler is that we should check our assumptions, so let's toss the three approaches to summing arrays into the Zen timer and see what comes out.
 
 #### Listing 7-1
-```
+```nasm
 ;
 ; *** Listing 7-1 ***
 ;
@@ -261,7 +261,7 @@ SumLoop:
 [Listing 7-1](#listing-7-1) measures the time required to calculate the 16-bit sum of a 64 Kb block without worrying about segments. This code runs in 619 ms, or 9.4 us per byte summed. (Note that [Listings 7-1](#listing-7-1) through [7-3](#listing-7-3) must be timed with the long-period Zen timer—via LZTIME.BAT—since they take more than 54 ms to run.)
 
 #### Listing 7-2
-```
+```nasm
 ;
 ; *** Listing 7-2 ***
 ;
@@ -296,7 +296,7 @@ SumLoopEnd:
 [Listing 7-2](#listing-7-2) measures the time required to calculate the 16-bit sum of a 128 Kb block. As is always the case with a memory block larger than 64 Kb, segments must be dealt with, and that shows in the performance of [Listing 7-2](#listing-7-2): 2044 ms, or 15.6 us per byte summed. In other words, [Listing 7-1](#listing-7-1), which doesn't concern itself with segments, sums bytes 66% faster than [Listing 7-2](#listing-7-2).
 
 #### Listing 7-3
-```
+```nasm
 ;
 ; *** Listing 7-3 ***
 ;
@@ -618,7 +618,7 @@ AddTwoFarInts endp
 High-level languages use `les` all the time to point to data that's not in the default data segment, and that hurts performance significantly. Most high-level languages aren't very smart about using `les`, either. For example, high-level languages tend to load a full 20-bit pointer into ES:BX every time through a loop, even though ES never gets changed from the last pass through the loop. That's one reason why high-level languages don't perform very well with more than 64 Kb of data.
 
 #### Listing 7-4
-```
+```nasm
 ;
 ; *** Listing 7-4 ***
 ;
@@ -692,7 +692,7 @@ Skip:
 You can usually easily avoid `les`-related performance problems in assembler. Consider [Listing 7-4](#listing-7-4), which adds one far array to another far array in the same way that most high-level languages would, storing both far pointers in memory variables and loading each pointer with `les` every time it's used. (Actually, [Listing 7-4](#listing-7-4) is better than your average high-level language subroutine because it uses `loop`, while most high-level languages use less efficient instruction sequences to handle looping.) [Listing 7-4](#listing-7-4) runs in 43.42 ms, or 43 us per array element addition.
 
 #### Listing 7-5
-```
+```nasm
 ;
 ; *** Listing 7-5 ***
 ;
@@ -780,7 +780,7 @@ Now look at [Listing 7-5](#listing-7-5), which does exactly the same thing that 
 Now you know why I keep saying that assembler can handle segments much better than high-level languages can. [Listing 7-5](#listing-7-5) isn't the ultimate in that regard, however; we can carry that concept a step further still, as shown in [Listing 7-6](#listing-7-6).
 
 #### Listing 7-6
-```
+```nasm
 ;
 ; *** Listing 7-6 ***
 ;
@@ -1121,7 +1121,7 @@ Had we needed to, we could also have stored data in CS by using `cs:`.
 Handy as segment override prefixes are, you shouldn't use them too heavily if you can help it. They're fine for one-shot instructions such as branching through a jump table in CS or retrieving a byte from the BIOS data area by way of ES, but they're to be avoided whenever possible inside tight loops. The reason: segment override prefixes officially take 2 cycles to execute and, since they're 1 byte long, they can actually take up to 4 cycles to fetch and execute—and 4 cycles is a significant amount of time inside a tight loop.
 
 #### Listing 7-7
-```
+```nasm
 ;
 ; *** Listing 7-7 ***
 ;
@@ -1171,7 +1171,7 @@ Skip:
 Whenever you can, organize your segments outside loops so that segment override prefixes aren't needed inside loops. For example, consider [Listing 7-7](#listing-7-7), which uses a segment override prefix while stripping the high bit of every byte in an array in the segment addressed via ES. [Listing 7-7](#listing-7-7) runs in 2.95 ms.
 
 #### Listing 7-8
-```
+```nasm
 ;
 ; *** Listing 7-8 ***
 ;
@@ -1501,7 +1501,7 @@ mov   dx,[bx]
 just to use base or index addressing once—the `mov` instruction used to load BX takes 4 cycles and 3 bytes, more than negating any advantage base addressing has over direct addressing.
 
 #### Listing 7-9
-```
+```nasm
 ;
 ; *** Listing 7-9 ***
 ;
@@ -1536,7 +1536,7 @@ SumArrayLoop:
 Inside loops, however, it's well worth using the most efficient addressing mode available. [Listing 7-9](#listing-7-9), which adds up the elements of a byte-sized array using base+index+displacement addressing every time through the loop, runs in 1.17 ms. [Listing 7-10](#listing-7-10), which changes the addressing mode to base+index by adding the displacement into the base outside the loop, runs in 1.01 ms, nearly 16% faster than [Listing 7-9](#listing-7-9). Finally, [Listing 7-11](#listing-7-11), which performs all the addressing calculations outside the loop and uses plain old base-only addressing, runs in just 0.95 ms, 6% faster still. (The string instruction `lods` is even faster than `mov al,[bx]`, as we'll see in Chapter 10. Always think of your non-*mod-reg-rm* alternatives.) Clearly, the choice of addressing mode matters considerably inside tight loops.
 
 #### Listing 7-10
-```
+```nasm
 ;
 ; *** Listing 7-10 ***
 ;
@@ -1572,7 +1572,7 @@ SumArrayLoop:
 ```
 
 #### Listing 7-11
-```
+```nasm
 ;
 ; *** Listing 7-11 ***
 ;
@@ -1861,7 +1861,7 @@ The official cycle counts are misleading, however. While immediate addressing is
 Looked at another way, immediate operands need to be fetched from the memory location pointed to by IP, so immediate addressing could be considered a memory addressing mode. Granted, immediate addressing is an efficient memory addressing mode, with no EA calculation time or the like—but memory accesses are nonetheless required, at the inescapable 4 cycles per byte.
 
 #### Listing 7-12
-```
+```nasm
 ;
 ; *** Listing 7-12 ***
 ;
@@ -1897,7 +1897,7 @@ SumArrayLoop:
 The upshot is simply that register operands are superior to immediate operands in loops and time-critical code, although immediate operands are still much better than *mod-reg-rm* memory operands. Back in [Listing 7-11](#listing-7-11), we set DL to 0 outside the loop so that we could use register-register `adc` inside the loop. That approach allowed the code to run in 0.95 ms. [Listing 7-12](#listing-7-12) is similar to [Listing 7-11](#listing-7-11), but is modified to use an immediate operand of 0 rather than a register operand containing 0. Even though the immediate operand is only byte-sized, [Listing 7-12](#listing-7-12) slows down to 1.02 ms. In other words, the need to fetch just 1 immediate operand byte every time through the loop slowed the entire loop by about 7%. What's more, the performance loss would have been approximately twice as great if we had used a word-sized immediate operand.
 
 #### Listing 7-13
-```
+```nasm
 ;
 ; *** Listing 7-13 ***
 ;
@@ -2407,7 +2407,7 @@ The goal of Mr. Hoyt's article was to expand a byte to a word by doubling each b
 Mr. Hoyt started his article with code that doubled each bit by testing that bit and branching accordingly to set the appropriate doubled bit values. He then optimized the code by eliminating branches entirely, instead using fast shift and rotate instructions, in a manner similar to that used by [Listing 7-14](#listing-7-14).
 
 #### Listing 7-14
-```
+```nasm
 ;
 ; *** Listing 7-14 ***
 ;
@@ -2465,7 +2465,7 @@ Bit-doubling is beautifully suited to an approach based on look-up tables. There
 Given those parameters, it should be clear that we can create a table of 256 words, one corresponding to each possible byte to be bit-doubled. We can then use each byte to be doubled as a look-up index into that table, retrieving the appropriate bit-doubled word with just a few instructions. Granted, 512 bytes would be needed to store the table, but the 50 or so instruction bytes we would save would partially compensate for the size of the table. Besides, surely the performance improvement from eliminating all those shifts, rotates, and especially instruction fetches would justify the extra bytes... wouldn't it?
 
 #### Listing 7-15
-```
+```nasm
 ;
 ; *** Listing 7-15 ***
 ;
@@ -2560,7 +2560,7 @@ Not by a long shot.
 What we'd like to do is somehow shrink [Listing 7-15](#listing-7-15) a good deal. Well, [Listing 7-15](#listing-7-15) is so large because it has a 512-byte table that's used to look up the bit-doubled words that can be selected by the 256 values that can be stored in a byte. We can shrink the table a great deal simply by converting it to a 16-byte table that's used to look up the bit-doubled *bytes* that can be selected by the 16 values that can be stored in a *nibble* (4 bits), and performing two look-ups into that table, one for each half of the byte being doubled.
 
 #### Listing 7-16
-```
+```nasm
 ;
 ; *** Listing 7-16 ***
 ;
@@ -2620,7 +2620,7 @@ There's that choice again: cycles or bytes.
 In truth, there are both cycles and bytes yet to be saved in [Listing 7-16](#listing-7-16). If we apply our knowledge of *mod-reg-rm* addressing to [Listing 7-16](#listing-7-16), we'll realize that it's a waste to use base+displacement addressing with the same displacement twice in a row; we can save a byte and a few cycles by loading SI with the displacement and using base+index addressing instead. [Listing 7-17](#listing-7-17), which incorporates this optimization, runs in 2.44 ms, a bit faster than [Listing 7-16](#listing-7-16).
 
 #### Listing 7-17
-```
+```nasm
 ;
 ; *** Listing 7-17 ***
 ;
@@ -2681,7 +2681,7 @@ BYTE_TO_DOUBLE=BYTE_TO_DOUBLE+1
 There's yet another optimization to be made, and this one brings us full circle, back to the start of our discussion of look-up tables. Think about it: [Listing 7-17](#listing-7-17) basically does nothing more than use two nibble values as look-up indices into a table of byte values. Sound familiar? It should—that's an awful lot like a description of `xlat`. (`xlat` can handle byte look-up values, but this task is just a subset of that.)
 
 #### Listing 7-18
-```
+```nasm
 ;
 ; *** Listing 7-18 ***
 ;
@@ -2749,7 +2749,7 @@ We'll see look-up tables again in Chapter 14, in the form of jump tables.
 Assembler offers excellent data-definition capabilities, and look-up tables can benefit greatly from those capabilities. No high-level language even comes close to assembler so far as flexible definition of data is concerned, both in terms of arbitrarily mixing different data types and in terms of letting the assembler perform calculations at assembly time; given that, why not let the assembler generate your look-up tables for you?
 
 ### Listing 7-19
-```
+```nasm
 ;
 ; *** Listing 7-19 ***
 ;
@@ -2770,7 +2770,7 @@ Assembler offers excellent data-definition capabilities, and look-up tables can 
 For example, consider the multiplication of a word-sized value by 80, a task often performed in order to calculate row offsets in display memory. [Listing 7-19](#listing-7-19) does this with the compact but slow `mul` instruction, at a pace of 30.17 us per multiply. [Listing 7-20](#listing-7-20) improves to 15.08 us per multiply by using a faster shift-and-add approach. However, the performance of the shift-and-add approach is limited by the prefetch queue cycle-eater; [Listing 7-21](#listing-7-21), which looks the multiplication results up in a table, is considerably faster yet, at 12.26 us per multiply. Once again, the look-up approach is faster even than tight register-only code, but that's not what's most interesting here.
 
 ### Listing 7-20
-```
+```nasm
 ;
 ; *** Listing 7-20 ***
 ;
@@ -2793,7 +2793,7 @@ For example, consider the multiplication of a word-sized value by 80, a task oft
 ```
 
 ### Listing 7-21
-```
+```nasm
 ;
 ; *** Listing 7-21 ***
 ;

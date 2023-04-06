@@ -59,7 +59,7 @@ A third reason is simple curiosity. We'll spend most of this book measuring inst
 ### The Test Set-Up
 
 #### Listing 5-1
-```
+```nasm
 ;
 ; *** Listing 5-1 ***
 ;

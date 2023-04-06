@@ -45,7 +45,7 @@ It's easy to think of the PC's hardware and bus as being transparent to programs
 For the remainder of this book, I'm going to refer to PC bus-and hardware-resident gremlins that affect code performance as "cycle-eaters." There are cycle-eaters of many sorts, of which the prefetch queue and display adapter cycle-eaters are perhaps the best-known; 8-bit cards in ATs and dynamic RAM refresh are other examples. Cycle-eaters are undeniably difficult to pin down. Once you've identified and understood them, though, you'll be among the elite few who can deal with the most powerful—and least understood—aspect of assembler programming.
 
 ### Listing 3-1
-```
+```nasm
 ;
 ; *** Listing 3-1 ***
 ;
@@ -82,7 +82,7 @@ For the remainder of this book, I'm going to refer to PC bus-and hardware-reside
 Just how important are cycle-eaters? Well, thanks to the display adapter cycle-eater, the code in [Listing 3-1](#listing-3-1), which accesses memory on an Enhanced Graphics Adapter (EGA), runs in 26.06 ms. That's more than twice as long as the 11.24 ms of [Listing 3-2](#listing-3-2), which is identical to [Listing 3-1](#listing-3-1) except that it accesses normal system memory rather than display memory. That's a difference in performance as great as that between an 8-MHz AT and a 16-MHz 80386 machine! Clearly, cycle-eaters cannot be ignored, and in the chapters to come we'll spend considerable time tracking them down and devising ways to work around them.
 
 ### Listing 3-2
-```
+```nasm
 ;
 ; *** Listing 3-2 ***
 ;
