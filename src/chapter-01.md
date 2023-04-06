@@ -51,7 +51,7 @@ High-level languages provide artificial environments that lend themselves relati
 
 Assembler, on the other hand, is simply a human-oriented representation of machine language. As a result, assembler provides a difficult programming environment—the bare hardware and systems software of the computer—*but properly constructed assembler programs suffer no transformation loss*, as shown in Figure 1.2.
 
-![**Figure 1.2** Only one transformation is required when creating an assembler program, and that single transformation is completely under the programmer's control. Assemblers perform no transformation from source code to machine language; instead, they merely map assembler instructions to machine language instructions on a one-to-one basis. As a result, the programmer is able to produce machine language code that's precisely tailored to the needs of each task a given application requires.](images/fig1.2RT.png)
+![**Figure 1.2** Only one transformation is required when creating an assembler program, and that single transformation is completely under the programmer's control. Assemblers perform no transformation from source code to machine language; instead, they merely map assembler instructions to machine language instructions on a one-to-one basis. As a result, the programmer is able to produce machine language code that's precisely tailored to the needs of each task a given application requires.](../images/fig1.2RT.png)
 
 The key, of course, is the programmer, since in assembler the programmer must essentially perform the transformation from the application specification to machine language entirely on his own. (The assembler merely handles the direct translation from assembler to machine language.)
 
