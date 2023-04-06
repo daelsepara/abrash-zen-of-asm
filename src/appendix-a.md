@@ -65,31 +65,31 @@ As described in Chapter 7, instructions that use *mod-reg-rm* memory operands re
 | Memory addressing mode      | Additional cycles required for EA calculation |
 |-----------------------------|-----------------------------------------------|
 | **Base**                    |                                               |
-| \ \ `[bp]`{.nasm}           | 5 cycles                                      |
-| \ \ `[bx]`{.nasm}           | 5 cycles                                      |
+|     `[bp]`                  | 5 cycles                                      |
+|     `[bx]`                  | 5 cycles                                      |
 | **Index**                   |                                               |
-| \ \ `[si]`{.nasm}           | 5 cycles                                      |
-| \ \ `[di]`{.nasm}           | 5 cycles                                      |
+|     `[si]`                  | 5 cycles                                      |
+|     `[di]`                  | 5 cycles                                      |
 | **Direct**                  |                                               |
-| \ \ `[MemVar]`{.nasm}       | 6 cycles                                      |
+|     `[MemVar]`              | 6 cycles                                      |
 | **Base+Index**              |                                               |
-| \ \ `[bp+di]`{.nasm}        | 7 cycles                                      |
-| \ \ `[bx+si]`{.nasm}        | 7 cycles                                      |
+|     `[bp+di]`               | 7 cycles                                      |
+|     `[bx+si]`               | 7 cycles                                      |
 | **Base+Index**              |                                               |
-| \ \ `[bx+di]`{.nasm}        | 8 cycles                                      |
-| \ \ `[bp+si]`{.nasm}        | 8 cycles                                      |
+|     `[bx+di]`               | 8 cycles                                      |
+|     `[bp+si]`               | 8 cycles                                      |
 | **Base+Displacement**       |                                               |
-| \ \ `[bx+disp]`{.nasm}      | 9 cycles                                      |
-| \ \ `[bp+disp]`{.nasm}      | 9 cycles                                      |
+|     `[bx+disp]`             | 9 cycles                                      |
+|     `[bp+disp]`             | 9 cycles                                      |
 | **Index+Displacement**      |                                               |
-| \ \ `[si+disp]`{.nasm}      | 9 cycles                                      |
-| \ \ `[di+disp]`{.nasm}      | 9 cycles                                      |
+|     `[si+disp]`             | 9 cycles                                      |
+|     `[di+disp]`             | 9 cycles                                      |
 | **Base+Index+Displacement** |                                               |
-| \ \ `[bp+di+disp]`{.nasm}   | 11 cycles                                     |
-| \ \ `[bx+si+disp]`{.nasm}   | 11 cycles                                     |
+|     `[bp+di+disp]`          | 11 cycles                                     |
+|     `[bx+si+disp]`          | 11 cycles                                     |
 | **Base+Index+Displacement** |                                               |
-| \ \ `[bx+di+disp]`{.nasm}   | 12 cycles                                     |
-| \ \ `[bp+si+disp]`{.nasm}   | 12 cycles                                     |
+|     `[bx+di+disp]`          | 12 cycles                                     |
+|     `[bp+si+disp]`          | 12 cycles                                     |
 
 For example, `mov bl,[si]` takes 13 cycles: 8 cycles for the execution of the basic instruction, and 5 cycles for effective address calculation.
 
