@@ -143,7 +143,9 @@ Thanks to its 16-bit bus, the 80286 can access word-sized memory variables just 
 
 Figure 15.1 illustrates this phenomenon.
 
-![](images/fig15.1RT.png)
+![Description](../images/fig15.1RT.png)
+
+**Figure 15.1**
 
 The conversion of word-sized accesses to odd addresses into double byte-sized accesses is transparent to memory-accessing instructions; all any instruction knows is that the requested word has been accessed, no matter whether 1 word-sized access or 2 byte-sized accesses were required.
 
@@ -165,11 +167,15 @@ In fact, word alignment provides such an excellent return on investment on the 8
 
 Lack of word alignment can also interfere with instruction fetching on the 80286, although not to the extent that it interferes with access to word-sized memory variables. The 80286 prefetches instructions a word at a time; even if a given instruction doesn't begin at an even address, the 80286 simply fetches the first byte of that instruction at the same time that it fetches the last byte of the previous instruction, as shown in Figure 15.2, then separates the bytes internally. That means that in most cases instructions run just as fast whether they're word-aligned or not.
 
-![](images/fig15.2RT.png)
+![Description](../images/fig15.2RT.png)
+
+**Figure 15.2**
 
 There is, however, a non-word-alignment penalty on *branches* to odd addresses. On a branch to an odd address, the 80286 is only able to fetch 1 useful byte with the first instruction fetch following the branch, as shown in Figure 15.3.
 
-![](images/fig15.3RT.png)
+![Description](../images/fig15.3RT.png)
+
+**Figure 15.3**
 
 In other words, lack of word alignment of the target instruction for any branch effectively cuts the instruction-fetching power of the 80286 in half for the first instruction fetch after that branch. While that may not sound like much, you'd be surprised at what it can do to tight loops; in fact, a brief story is in order.
 
@@ -253,9 +259,9 @@ Of course, the picture is quite a bit different when you compare the performance
 
 And that explains the second viewpoint expressed above regarding the display adapter cycle-eater vis-a-vis the 80286 and 80386. The display adapter cycle-eater, as measured in cycles lost to wait states, is indeed much worse on AT-class computers than it is on the PC, and it's worse still on more powerful computers.
 
-How bad is the display adapter cycle-eater on an AT? Back in Chapter 3, we measured the performance of `rep movsw` accessing system memory in a PC and display memory on an EGA installed in a PC. Access to EGA memory proved to be more than twice as slow as access to system memory; [Listing 3-1](#listing-3-1), which accessed EGA memory, ran in 26.06 ms, while [Listing 3-2](#listing-3-2), which accessed system memory, ran in 11.24 ms.
+How bad is the display adapter cycle-eater on an AT? Back in Chapter 3, we measured the performance of `rep movsw` accessing system memory in a PC and display memory on an EGA installed in a PC. Access to EGA memory proved to be more than twice as slow as access to system memory; [Listing 3-1](chapter-03.md#listing-3-1), which accessed EGA memory, ran in 26.06 ms, while [Listing 3-2](chapter-03.md#listing-3-2), which accessed system memory, ran in 11.24 ms.
 
-When the same two listings are run on an EGA-equipped 10-MHz AT clone, the results are startling. [Listing 3-2](#listing-3-2) accesses system memory in just 1.31 ms, more than eight times faster than on the PC. [Listing 3-1](#listing-3-1) accesses EGA memory in 16.12 ms—considerably less than twice as fast as on the PC, and well over ten times as slow as [Listing 3-1](#listing-3-1). *The display adapter cycle-eater can slow an AT*—*or even an 80386 computer*—*to near-PC speeds when display memory is accessed.*
+When the same two listings are run on an EGA-equipped 10-MHz AT clone, the results are startling. [Listing 3-2](chapter-03.md#listing-3-2) accesses system memory in just 1.31 ms, more than eight times faster than on the PC. [Listing 3-1](chapter-03.md#listing-3-1) accesses EGA memory in 16.12 ms—considerably less than twice as fast as on the PC, and well over ten times as slow as [Listing 3-1](chapter-03.md#listing-3-1). *The display adapter cycle-eater can slow an AT*—*or even an 80386 computer*—*to near-PC speeds when display memory is accessed.*
 
 I know that's hard to believe, but the display adapter cycle-eater gives out just so many display memory accesses in a given time, and no more, no matter how fast the processor is. In fact, the faster the processor, the more the display adapter cycle-eater hurts the performance of instructions that access display memory. The display adapter cycle-eater is not only still present in 80286/80386 computers, it's worse than ever.
 
@@ -357,13 +363,17 @@ One obvious reason to discuss the `popf` workaround is that it's useful. Another
 
 All `popf` does is pop the word on top of the stack into the FLAGS register, as shown in Figure 15.4.
 
-![](images/fig15.4RT.png)
+![Description](../images/fig15.4RT.png)
+
+**Figure 15.4**
 
 How can we do that without `popf`? Of course, the 80286's designers intended us to use `popf` for this purpose, and didn't intentionally provide any alternative approach, so we'll have to devise an alternative approach of our own. To do that, we'll have to search for instructions that contain some of the same functionality as `popf`, in the hope that one of those instructions can be used in some way to replace `popf`.
 
 Well, there's only one instruction other than `popf` that loads the FLAGS register directly from the stack, and that's `iret`, which loads the FLAGS register from the stack as it branches, as shown in Figure 15.5.
 
-![](images/fig15.5RT.png)
+![Description](../images/fig15.5RT.png)
+
+**Figure 15.5**
 
 `iret` has no known bugs of the sort that plagues `popf`, so it's certainly a candidate to replace `popf` in non-interruptible applications. Unfortunately, `iret` loads the FLAGS register with the *third* word down on the stack, not the word on top of the stack, as is the case with `popf`; the far return address that `iret` pops into CS:IP lies between the top of the stack and the word popped into the FLAGS register.
 
@@ -392,7 +402,9 @@ popfskip:
 
 The operation of this code is illustrated in Figure 15.6.
 
-![](images/fig15.6RT.png)
+![Description](../images/fig15.6RT.png)
+
+**Figure 15.6**
 
 The `popf` workaround can best be implemented as a macro; we can also emulate a far call by pushing CS and performing a near call, thereby shrinking the workaround code by 1 byte:
 

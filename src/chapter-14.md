@@ -20,9 +20,106 @@ Now, however, consider that far returns must be paired with far calls. So what, 
 
 58 cycles—and where there's a far call, there's a far return yet to come. Together, an indirect far call and the corresponding return take at least 90 cycles—as long as or longer than an 8-bit divide! Even a direct far call and the corresponding return together take at least 68 cycles—and very possibly more when you add in the prefetch queue effects of fetching a 5-byte instruction and emptying the prefetch queue twice.
 
-Let's see just how bad far calls are. In the last chapter, we compared the performance of a subroutine in [Listing 13-16](#listing-13-16) with that of a macro in [Listing 13-17](#listing-13-17). The subroutine in [Listing 13-16](#listing-13-16)—`IsPrintable`—is called with a near `call` and returns with a near `ret`. Given that quite a bit besides the `call` and `ret` occurs each time the subroutine is called—including several branches and two memory accesses—how much slower do you suppose overall performance would be if `IsPrintable` were entered and exited with far branches?
+Let's see just how bad far calls are. In the last chapter, we compared the performance of a subroutine in [Listing 13-16](chapter-13.md#listing-13-16) with that of a macro in [Listing 13-17](chapter-13.md#listing-13-17). The subroutine in [Listing 13-16](chapter-13.md#listing-13-16)—`IsPrintable`—is called with a near `call` and returns with a near `ret`. Given that quite a bit besides the `call` and `ret` occurs each time the subroutine is called—including several branches and two memory accesses—how much slower do you suppose overall performance would be if `IsPrintable` were entered and exited with far branches?
 
-Quite a bit, as it turns out. [Listing 13-16](#listing-13-16) ran in 3.48 ms. [Listing 14-1](#listing-14-1), which is identical to [Listing 13-16](#listing-13-16) save that `IsPrintable` is a far procedure, takes 4.32 ms to finish. In other words, the simple substitution of a near `call`/`ret` for a far `call`/`ret` results in a 24% performance increase.
+Quite a bit, as it turns out. [Listing 13-16](chapter-13.md#listing-13-16) ran in 3.48 ms. [Listing 14-1](#listing-14-1), which is identical to [Listing 13-16](chapter-13.md#listing-13-16) save that `IsPrintable` is a far procedure, takes 4.32 ms to finish. In other words, the simple substitution of a near `call`/`ret` for a far `call`/`ret` results in a 24% performance increase.
+
+#### Listing 14-1
+```nasm
+;
+; *** Listing 14-1 ***
+;
+; Copies a zero-terminated string to another string,
+; filtering out non-printable characters by means of a
+; subroutine that performs the test. The subroutine is
+; called with a far call and returns with a far return.
+;
+	jmp	Skip
+;
+SourceString	label	byte
+	db	'This is a sample string, consisting of '
+X=1
+	rept	31
+	db	X
+X=X+1
+	endm
+	db	7fh
+	db	'both printable and non-printable '
+	db	'characters', 0
+DestinationString	label	byte
+	db	200 dup (?)
+;
+; Determines whether a character is printable (in the range
+; 20h through 7Eh).
+;
+; Input:
+;	AL = character to check
+;
+; Output:
+;	Zero flag set to 1 if character is printable,
+;		set to 0 otherwise
+;
+; Registers altered: none
+;
+IsPrintable	proc	far
+	cmp	al,20h
+	jb	IsPrintableDone	;not printable
+	cmp	al,7eh
+	ja	IsPrintableDone	;not printable
+	cmp	al,al	;set the Zero flag to 1, since the
+			; character is printable
+IsPrintableDone:
+	ret
+IsPrintable	endp
+;
+; Copies a zero-terminated string to another string,
+; filtering out non-printable characters.
+;
+; Input:
+;	DS:SI = source string
+;	ES:DI = destination string
+;
+; Output: none
+;
+; Registers altered: AL, SI, DI
+;
+; Direction flag cleared
+;
+; Note: Does not handle strings that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+CopyPrintable:
+	cld
+CopyPrintableLoop:
+	lodsb			;get the next byte to copy
+	call	IsPrintable	;is it printable?
+	jnz	NotPrintable	;nope, don't copy it
+	stosb			;put the byte in the
+	     			; destination string
+	jmp	CopyPrintableLoop ;the character was
+				; printable, so it couldn't
+				; possibly have been 0. No
+				; need to check whether it
+				; terminated the string
+NotPrintable:
+	and	al,al		;was that the
+				; terminating zero?
+	jnz	CopyPrintableLoop ;no, do next byte
+	stosb			;copy the terminating zero
+	ret			;done
+;
+Skip:
+	call	ZTimerOn
+	mov	di,seg DestinationString
+	mov	es,di
+	mov	di,offset DestinationString
+			;ES:DI points to the destination
+	mov	si,offset SourceString
+			;DS:SI points to the source
+	call	CopyPrintable	;copy the printable
+				; characters
+	call	ZTimerOff
+```
 
 I don't think I really have to interpret those results for you, but just in case...
 
@@ -38,7 +135,9 @@ Ideally, all the code in a given program should fit in one 64 Kb segment, elimin
 
 For example, few programs with more than 64 Kb of code (large code model programs) are written in pure assembler; usually the bulk of the program is written in C, Pascal, or the like, with assembler used when speed is of the essence. In such programs all the assembler code will often fit in a single 64 Kb segment, and the complete control assembler gives you over segment naming makes it easy to place multiple assembler modules in the same code segment. Once that's done, all branches within the assembler code can be near, even though branches between the high-level language code and the assembler code must be far, as shown in Figure 14.1.
 
-![](images/fig14.1RT.png)
+![Description](../images/fig14.1RT.png)
+
+**Figure 14.1**
 
 Many compilers allow you to specify the segment names used for individual modules, if you so desire. If your compiler supports code segment naming and also supports near procedures in the large code model (as, for example, Turbo C does), you could actually make near calls not only within your assembler code, but also *into* that code from the high-level language. The key is giving selected high-level language modules and your assembler code identical code segment names, so they'll share a single code segment, then using the `near` keyword to declare the assembler subroutines as near externals in the high-level language code.
 
@@ -48,7 +147,9 @@ In short, in the code that really matters you can often enjoy the performance ad
 
 Whether you're programming in assembler or a high-level language, one great benefit of using near rather than far subroutines is the reduction in the size of jump and call tables that near subroutines make possible. While the address of a near subroutine can be specified as a 1-word table entry, a full doubleword is required to specify the segment and offset of a far subroutine. It doesn't take a genius to figure out that we can cut the size of a jump or call table in half if we can convert the subroutines it branches to from far to near, as shown in Figure 14.2.
 
-![](images/fig14.2RT.png)
+![Description](../images/fig14.2RT.png)
+
+**Figure 14.2**
 
 When we add the space savings of near-branching jump and call tables to the performance advantages of indirect near branches that we explored earlier, we can readily see that it's worth going to a good deal of trouble to make the near-branching variety of jump and call tables whenever possible. We'll return to the topic of jump and call tables at the end of this chapter.
 
@@ -115,7 +216,106 @@ Enough of far branches, already. Let's continue with some interesting ways to re
 
 Suppose that we've got a subroutine that's only called from one place in an entire program. That might be the case with a subroutine called through a call table from a central dispatch point, for example. Well, then, there's really no reason to call and return; instead, we can simply jump to the subroutine, and then jump back to the instruction after the call point, saving some cycles in the process.
 
-For example, consider the code in [Listing 14-2](#listing-14-2), which is yet another modification of the printable character filtering program of [Listing 13-16](#listing-13-16). The modification in [Listing 14-2](#listing-14-2) is that the call to `IsPrintable` has been replaced with a jump to the subroutine, and the return from `IsPrintable` has been replaced with a second jump, this time to the instruction after the jump that invoked the subroutine.
+For example, consider the code in [Listing 14-2](#listing-14-2), which is yet another modification of the printable character filtering program of [Listing 13-16](chapter-13.md#listing-13-16). The modification in [Listing 14-2](#listing-14-2) is that the call to `IsPrintable` has been replaced with a jump to the subroutine, and the return from `IsPrintable` has been replaced with a second jump, this time to the instruction after the jump that invoked the subroutine.
+
+#### Listing 14-2
+```nasm
+;
+; *** Listing 14-2 ***
+;
+; Copies a zero-terminated string to another string,
+; filtering out non-printable characters by means of a
+; subroutine that performs the test. The subroutine is
+; invoked with a JMP and returns with another JMP.
+;
+	jmp	Skip
+;
+SourceString	label	byte
+	db	'This is a sample string, consisting of '
+X=1
+	rept	31
+	db	X
+X=X+1
+	endm
+	db	7fh
+	db	'both printable and non-printable '
+	db	'characters', 0
+DestinationString	label	byte
+	db	200 dup (?)
+;
+; Determines whether a character is printable (in the range
+; 20h through 7Eh).
+;
+; Input:
+;	AL = character to check
+;
+; Output:
+;	Zero flag set to 1 if character is printable,
+;		set to 0 otherwise
+;
+; Registers altered: none
+;
+IsPrintable:
+	cmp	al,20h
+	jb	IsPrintableDone	;not printable
+	cmp	al,7eh
+	ja	IsPrintableDone	;not printable
+	cmp	al,al	;set the Zero flag to 1, since the
+			; character is printable
+IsPrintableDone:
+	jmp	short IsPrintableReturn
+			;this hardwires IsPrintable to
+			; return to just one place
+;
+; Copies a zero-terminated string to another string,
+; filtering out non-printable characters.
+;
+; Input:
+;	DS:SI = source string
+;	ES:DI = destination string
+;
+; Output: none
+;
+; Registers altered: AL, SI, DI
+;
+; Direction flag cleared
+;
+; Note: Does not handle strings that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+CopyPrintable:
+	cld
+CopyPrintableLoop:
+	lodsb			;get the next byte to copy
+	jmp	IsPrintable	;is it printable?
+IsPrintableReturn:
+	jnz	NotPrintable	;nope, don't copy it
+	stosb			;put the byte in the
+	     			; destination string
+	jmp	CopyPrintableLoop ;the character was
+				; printable, so it couldn't
+				; possibly have been 0. No
+				; need to check whether it
+				; terminated the string
+NotPrintable:
+	and	al,al		;was that the
+				; terminating zero?
+	jnz	CopyPrintableLoop ;no, do next byte
+	stosb			;copy the terminating zero
+	ret			;done
+;
+Skip:
+	call	ZTimerOn
+	mov	di,seg DestinationString
+	mov	es,di
+	mov	di,offset DestinationString
+			;ES:DI points to the destination
+	mov	si,offset SourceString
+			;DS:SI points to the source
+	call	CopyPrintable	;copy the printable
+				; characters
+	call	ZTimerOff
+```
 
 That simple change cuts overall execution time to 3.09 ms, an improvement of more than 12%. Granted, part of the improvement is due to the use of short jumps, each of which reduces prefetching by 1 byte over normal jumps; when:
 
@@ -197,6 +397,110 @@ pushes `DispatchLoopTop` before jumping, so each subroutine returns to `Dispatch
 
 Surprisingly, flexibility is not the only virtue of the return-through-register approach—under the right circumstances, performance can benefit as well, since a branch through a register is only 2 bytes long and executes in just 11 cycles. [Listing 14-3](#listing-14-3) shows [Listing 14-2](#listing-14-2) modified to store the return address in BP. While this code is a tad longer than [Listing 14-2](#listing-14-2), since BP must be loaded, [Listing 14-3](#listing-14-3) executes in 3.03 ms—slightly *faster* than [Listing 14-2](#listing-14-2). The key is that BP is loaded only once, outside the loop, in `CopyPrintable`, so the extra overhead of loading BP is spread over the many repetitions of the loop. Meanwhile, the 4-cycle performance advantage of `jmp bp` over `jmp short IsPrintableReturn` is gained every time through the loop.
 
+#### Listing 14-3
+```nasm
+;
+; *** Listing 14-3 ***
+;
+; Copies a zero-terminated string to another string,
+; filtering out non-printable characters by means of a
+; subroutine that performs the test. The subroutine is
+; invoked with a JMP and returns with a JMP through a
+; register.
+;
+	jmp	Skip
+;
+SourceString	label	byte
+	db	'This is a sample string, consisting of '
+X=1
+	rept	31
+	db	X
+X=X+1
+	endm
+	db	7fh
+	db	'both printable and non-printable '
+	db	'characters', 0
+DestinationString	label	byte
+	db	200 dup (?)
+;
+; Determines whether a character is printable (in the range
+; 20h through 7Eh).
+;
+; Input:
+;	AL = character to check
+;	BP = return address
+;
+; Output:
+;	Zero flag set to 1 if character is printable,
+;		set to 0 otherwise
+;
+; Registers altered: none
+;
+IsPrintable:
+	cmp	al,20h
+	jb	IsPrintableDone	;not printable
+	cmp	al,7eh
+	ja	IsPrintableDone	;not printable
+	cmp	al,al	;set the Zero flag to 1, since the
+			; character is printable
+IsPrintableDone:
+	jmp	bp	;return to the address in BP
+;
+; Copies a zero-terminated string to another string,
+; filtering out non-printable characters.
+;
+; Input:
+;	DS:SI = source string
+;	ES:DI = destination string
+;
+; Output: none
+;
+; Registers altered: AL, SI, DI, BP
+;
+; Direction flag cleared
+;
+; Note: Does not handle strings that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+CopyPrintable:
+	cld
+	mov	bp,offset IsPrintableReturn
+				;set the return address for
+				; IsPrintable. Note that
+				; this is done outside the
+				; loop for speed
+CopyPrintableLoop:
+	lodsb			;get the next byte to copy
+	jmp	IsPrintable	;is it printable?
+IsPrintableReturn:
+	jnz	NotPrintable	;nope, don't copy it
+	stosb			;put the byte in the
+	     			; destination string
+	jmp	CopyPrintableLoop ;the character was
+				; printable, so it couldn't
+				; possibly have been 0. No
+				; need to check whether it
+				; terminated the string
+NotPrintable:
+	and	al,al		;was that the
+				; terminating zero?
+	jnz	CopyPrintableLoop ;no, do next byte
+	stosb			;copy the terminating zero
+	ret			;done
+;
+Skip:
+	call	ZTimerOn
+	mov	di,seg DestinationString
+	mov	es,di
+	mov	di,offset DestinationString
+			;ES:DI points to the destination
+	mov	si,offset SourceString
+			;DS:SI points to the source
+	call	CopyPrintable	;copy the printable
+				; characters
+	call	ZTimerOff
+```
+
 What's more, the version of `IsPrintable` in [Listing 14-3](#listing-14-3) can be called from anywhere, so long as the calling code sets BP to the return address. By contrast, `IsPrintable` is hardwired to return only to `CopyPrintable` in [Listing 14-2](#listing-14-2).
 
 Once again, the point is not that you should generally replace `call`-`ret` with one of the many flavors of `jmp`-`jmp`, but rather that you should understand the unusual flexibility that `jmp`-`jmp` offers. It's a bonus that `jmp`-`jmp` can sometimes improve performance; the main point is that the flexibility of this approach lets you perform an odd lot of slightly improbable but sometimes most useful tasks.
@@ -262,13 +566,67 @@ In short, reserve `int` for accessing DOS and BIOS services and for those applic
 
 Interrupts are so slow that it often pays to go to considerable trouble to move them out of loops. Consider character-by-character processing of a text file, as for example when converting the contents of a text file to uppercase. In such an application it's easiest to avoid the complications of buffering text by letting DOS feed you one character at a time, as shown in Figure 14.3.
 
-![](images/fig14.3RT.png)
+![Description](../images/fig14.3RT.png)
+
+**Figure 14.3**
 
 [Listing 14-4](#listing-14-4) illustrates the approach of letting DOS do the work on a character-by-character basis. [Listing 14-4](#listing-14-4) reads characters from the standard input, converts them to uppercase, and prints the results to the standard output, interacting with DOS a character at a time at both the input and output stages. [Listing 14-4](#listing-14-4) takes 2.009 seconds to convert the contents of the file TEST.TXT, shown in Figure 14.4, to uppercase and send the result to the standard output.
 
+#### Listing 14-4
+```nasm
+;
+; *** Listing 14-4 ***
+;
+; Copies the standard input to the standard output,
+; converting all characters to uppercase. Does so
+; one character at a time.
+;
+	jmp	Skip
+; Storage for the character we're processing.
+Character	db	?
+ErrorMsg	db	'An error occurred', 0dh, 0ah
+ERROR_MSG_LENGTH equ	$-ErrorMsg
+;
+Skip:
+	call	ZTimerOn
+CopyLoop:
+	mov	ah,3fh	;DOS read fn
+	sub	bx,bx	;handle 0 is the standard input
+	mov	cx,1	;we want to get 1 character
+	mov	dx,offset Character ;the character goes here
+	int	21h	;get the character
+	jc	Error	;check for an error
+	and	ax,ax	;did we read any characters?
+	jz	Done	;no, we've hit the end of the file
+	mov	al,[Character]	;get the character and
+	cmp	al,'a'		; convert it to uppercase
+	jb	WriteCharacter	; if it's lowercase
+	cmp	al,'z'
+	ja	WriteCharacter
+	and	al,not 20h	;it's uppercase-convert to
+	mov	[Character],al	; uppercase and save
+WriteCharacter:
+	mov	ah,40h	;DOS write fn
+	mov	bx,1	;handle 1 is the standard output
+	mov	cx,1	;we want to write 1 character
+	mov	dx,offset Character ;the character to write
+	int	21h	;write the character
+	jnc	CopyLoop ;if no error, do the next character
+Error:
+	mov	ah,40h	;DOS write fn
+	mov	bx,2	;handle 2 is standard error
+	mov	cx,ERROR_MSG_LENGTH ;# of chars to display
+	mov	dx,offset ErrorMsg ;error msg to display
+	int	21h	;notify of error
+Done:
+	call	ZTimerOff
+```
+
 (There's a slight complication in timing [Listing 14-4](#listing-14-4). [Listing 14-4](#listing-14-4) must be assembled and linked with LZTIME.BAT, since it takes more than 54 ms to run. However, [Listing 14-4](#listing-14-4) expects to receive characters from the standard input when it executes. When run with the standard input *not* redirected, as occurs when LZTIME.BAT completes assembly and linking, [Listing 14-4](#listing-14-4) waits indefinitely for input from the keyboard.
 
-![](images/fig14.4RT.png)
+![Description](../images/fig14.4RT.png)
+
+**Figure 14.4**
 
 Consequently, after the link is complete—when the program is waiting for keyboard input—you must press Ctrl-Break to stop the program and type:
 
@@ -278,9 +636,84 @@ LZTEST <TEST.TXT
 
 at the DOS prompt to time the code in [Listing 14-4](#listing-14-4). The same is true for [Listing 14-5](#listing-14-5).)
 
+#### Listing 14-5
+```nasm
+;
+; *** Listing 14-5 ***
+;
+; Copies the standard input to the standard output,
+; converting all characters to uppercase. Does so in
+; blocks of 256 characters.
+;
+	jmp	Skip
+; Storage for the characters we're processing.
+CHARACTER_BLOCK_SIZE	equ	256
+CharacterBlock	db	CHARACTER_BLOCK_SIZE dup (?)
+ErrorMsg	db	'An error occurred', 0dh, 0ah
+ERROR_MSG_LENGTH equ	$-ErrorMsg
+;
+Skip:
+	call	ZTimerOn
+CopyLoop:
+	mov	ah,3fh	;DOS read fn
+	sub	bx,bx	;handle 0 is the standard input
+	mov	cx,CHARACTER_BLOCK_SIZE
+			;we want to get a block
+	mov	dx,offset CharacterBlock
+			;the characters go here
+	int	21h	;get the characters
+	jc	Error	;check for an error
+	mov	cx,ax	;get the count where it does us the
+			; most good
+	jcxz	Done	;if we didn't read anything, we've
+			; hit the end of the file
+	mov	dx,cx	;remember how many characters we read
+	mov	bx,offset CharacterBlock
+			;point to the first character to
+			; convert
+ConvertLoop:
+	mov	al,[bx]		;get the next character and
+	cmp	al,'a'		; convert it to uppercase
+	jb	ConvertLoopBottom ; if it's lowercase
+	cmp	al,'z'
+	ja	ConvertLoopBottom
+	and	al,not 20h	;it's uppercase-convert to
+	mov	[bx],al		; uppercase and save
+ConvertLoopBottom:
+	inc	bx		;point to the next character
+	loop	ConvertLoop
+	mov	cx,dx	;get back the character count in
+			; this block, to serve as a count of
+			; bytes for DOS to write
+	mov	ah,40h	;DOS write fn
+	mov	bx,1	;handle 1 is the standard output
+	mov	dx,offset CharacterBlock
+			;point to the characters to write
+	push	cx	;remember # of characters read
+	int	21h	;write the character
+	pop	ax	;get back the # of characters in
+			; this block
+	jc	Error	;check for an error
+	cmp	ax,CHARACTER_BLOCK_SIZE
+			;was it a partial block?
+	jz	CopyLoop ;no, so we're not done yet
+	jmp	short Done ;it was a partial block, so that
+			   ; was the end of the file
+Error:
+	mov	ah,40h	;DOS write fn
+	mov	bx,2	;handle 2 is standard error
+	mov	cx,ERROR_MSG_LENGTH ;# of chars to display
+	mov	dx,offset ErrorMsg ;error msg to display
+	int	21h	;notify of error
+Done:
+	call	ZTimerOff
+```
+
 The problem with the approach of [Listing 14-4](#listing-14-4) is that all the overhead of calling a DOS function—including an `int` and an `iret`—occurs twice for each character, once during input and once during output. We can easily avoid all that simply by reading a sizable block of text with a single DOS call, processing it a character at a time *in place* (thereby avoiding the overhead of interrupts and DOS calls), and printing it out as a block with a single DOS call, as shown in Figure 14.5.
 
-![](images/fig14.5RT.png)
+![Description](../images/fig14.5RT.png)
+
+**Figure 14.5**
 
 This process can be repeated a block at a time until the source file runs out of characters.
 
@@ -604,7 +1037,9 @@ There are a number of ways to get multiple uses out of a single instruction that
 
 Suppose that we have eight 1-bit flags stored in a single byte-sized memory variable, `StateFlags`, as shown in Figure 14.6.
 
-![](images/fig14.6RT.png)
+![Description](../images/fig14.6RT.png)
+
+**Figure 14.6**
 
 In order to check whether a high-or medium-priority event is pending, as indicated by bits 7 and 6 of `StateFlags`, we'd normally use something like:
 
@@ -641,7 +1076,9 @@ which is one full instruction shorter.
 
 Stretching this idea still further, we could relocate three of our flags to bits 7, 6, and 5 of `EventFlags`, with bits 4-0 always set to 0, as shown in Figure 14.7.
 
-![](images/fig14.7RT.png)
+![Description](../images/fig14.7RT.png)
+
+**Figure 14.7**
 
 Then, if the first two tests failed, a zero/non-zero test would serve to determine whether the flag in bit 5 is set, and we could get *three* tests out of a single operation:
 
@@ -714,13 +1151,549 @@ Given that we're already familiar with `jcxz` and `loop`, we'll take a look at t
 
 For example, suppose that we want to search an array for the first entry that matches a particular character. Normally, we would do that with `repnz scasb`, but in this particular case we need to perform a case-insensitive search. [Listing 14-6](#listing-14-6) shows a standard solution to this problem, which tests for a match and branches out of the loop when a match is found, or falls through the bottom of the loop if no match exists. [Listing 14-6](#listing-14-6) runs in 1134 us for the test case.
 
+#### Listing 14-6
+```nasm
+;
+; *** Listing 14-6 ***
+;
+; Searches for the first appearance of a character, in any
+; case, in a byte-sized array by using JZ and LOOP.
+;
+	jmp	Skip
+;
+ByteArray	label	byte
+	db	'Array Containing Both Upper and Lowercase'
+	db	' Characters And Blanks'
+ARRAY_LENGTH	equ	($-ByteArray)
+;
+; Finds the first occurrence of the specified character, in
+; any case, in the specified byte-sized array.
+;
+; Input:
+;	AL = character for which to perform a
+;		case-insensitive search
+;	CX = array length (0 means 64K long)
+;	DS:SI = array to search
+;
+; Output:
+;	SI = pointer to first case-insensitive match, or 0
+;		if no match is found
+;
+; Registers altered: AX, CX, SI
+;
+; Direction flag cleared
+;
+; Note: Does not handle arrays that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+; Note: Do not pass an array that starts at offset 0 (SI=0),
+;	since a match on the first byte and failure to find
+;	the byte would be indistinguishable.
+;
+CaseInsensitiveSearch:
+	cld
+	cmp	al,'a'
+	jb	CaseInsensitiveSearchBegin
+	cmp	al,'z'
+	ja	CaseInsensitiveSearchBegin
+	and	al,not 20h	;make sure the search byte
+				; is uppercase
+CaseInsensitiveSearchBegin:
+	mov	 ah,al		;put the search byte in AH
+				; so we can use AL to hold
+				; the bytes we're checking
+CaseInsensitiveSearchLoop:
+	lodsb			;get the next byte from the
+				; array being searched
+	cmp	al,'a'
+	jb	CaseInsensitiveSearchIsUpper
+	cmp	al,'z'
+	ja	CaseInsensitiveSearchIsUpper
+	and	al,not 20h	;make sure the array byte is
+				; uppercase
+CaseInsensitiveSearchIsUpper:
+	cmp	al,ah		;do we have a
+				; case-insensitive match?
+	jz	CaseInsensitiveSearchMatchFound	;yes
+	loop	CaseInsensitiveSearchLoop
+				;check the next byte, if any
+	sub	si,si		;no match found
+	ret
+CaseInsensitiveSearchMatchFound:
+	dec	si		;point back to the matching
+				; array byte
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	al,'K'		;character to search for
+	mov	si,offset ByteArray ;array to search
+	mov	cx,ARRAY_LENGTH	;# of bytes to search
+				; through
+	call	CaseInsensitiveSearch
+				;perform a case-insensitive
+				; search for 'K'
+	call	ZTimerOff
+```
+
 You can probably see where we're heading. The `jz`/`loop` pair at the bottom of the loop in [Listing 14-6](#listing-14-6) is an obvious candidate for conversion to `loopnz`, and [Listing 14-7](#listing-14-7) takes advantage of just that conversion. Essentially, the test for a match is moved out of the loop in [Listing 14-7](#listing-14-7), with `loopnz` replacing `loop` in order to allow the loop to end either on a match or at the end of the array. The result: [Listing 14-7](#listing-14-7) runs in 1036 us, more than 9% faster than [Listing 14-7](#listing-14-7). Not a *massive* improvement..but not a bad payoff for replacing one instruction and moving another.
+
+#### Listing 14-7
+```nasm
+;
+; *** Listing 14-7 ***
+;
+; Searches for the first appearance of a character, in any
+; case, in a byte-sized array by using LOOPNZ.
+;
+	jmp	Skip
+;
+ByteArray	label	byte
+	db	'Array Containing Both Upper and Lowercase'
+	db	' Characters And Blanks'
+ARRAY_LENGTH	equ	($-ByteArray)
+;
+; Finds the first occurrence of the specified character, in
+; any case, in the specified byte-sized array.
+;
+; Input:
+;	AL = character for which to perform a
+;		case-insensitive search
+;	CX = array length (0 means 64K long)
+;	DS:SI = array to search
+;
+; Output:
+;	SI = pointer to first case-insensitive match, or 0
+;		if no match is found
+;
+; Registers altered: AX, CX, SI
+;
+; Direction flag cleared
+;
+; Note: Does not handle arrays that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+; Note: Do not pass an array that starts at offset 0 (SI=0),
+;	since a match on the first byte and failure to find
+;	the byte would be indistinguishable.
+;
+CaseInsensitiveSearch:
+	cld
+	cmp	al,'a'
+	jb	CaseInsensitiveSearchBegin
+	cmp	al,'z'
+	ja	CaseInsensitiveSearchBegin
+	and	al,not 20h	;make sure the search byte
+				; is uppercase
+CaseInsensitiveSearchBegin:
+	mov	 ah,al		;put the search byte in AH
+				; so we can use AL to hold
+				; the bytes we're checking
+CaseInsensitiveSearchLoop:
+	lodsb			;get the next byte from the
+				; array being searched
+	cmp	al,'a'
+	jb	CaseInsensitiveSearchIsUpper
+	cmp	al,'z'
+	ja	CaseInsensitiveSearchIsUpper
+	and	al,not 20h	;make sure the array byte is
+				; uppercase
+CaseInsensitiveSearchIsUpper:
+	cmp	al,ah		;do we have a
+				; case-insensitive match?
+	loopnz	CaseInsensitiveSearchLoop
+				;fall through if we have a
+				; match, or if we've run out
+				; of bytes. Otherwise, check
+				; the next byte
+	jz	CaseInsensitiveSearchMatchFound
+				;we did find a match
+	sub	si,si		;no match found
+	ret
+CaseInsensitiveSearchMatchFound:
+	dec	si		;point back to the matching
+				; array byte
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	al,'K'		;character to search for
+	mov	si,offset ByteArray ;array to search
+	mov	cx,ARRAY_LENGTH	;# of bytes to search
+				; through
+	call	CaseInsensitiveSearch
+				;perform a case-insensitive
+				; search for 'K'
+	call	ZTimerOff
+```
 
 (Food for thought: [Listings 14-6](#listing-14-6) and [14-7](#listing-14-7) could be speeded up by storing uppercase and lowercase versions of the search byte in separate registers and simply comparing each byte of the array to *both* versions. The extra comparison would be a good deal faster than the code used in [Listings 14-6](#listing-14-6) and [14-7](#listing-14-7) to convert each byte of the array to uppercase.)
 
 ### How You Loop Matters More Than You Might Think
 
 In the last chapter, I lambasted `loop` as a slow looping instruction. Well, it *is* slow—but if you must perform repetitive tasks by branching—that is, if you must loop—`loop` is a good deal faster than other branching instructions. To drive that point home, I'm going to measure the performance of the case-insensitive search program of [Listing 14-6](#listing-14-6) with the looping code implemented as follows: with `loop`, with `dec reg16/jnz`, with `dec reg8/jnz`, with `dec mem8/jnz`, and with `dec mem16/jnz`. (Remember that `dec reg16` is faster than `dec reg8`, and that byte-sized memory accesses are faster than word-sized accesses.)
+
+#### Listing 14-8
+```nasm
+;
+; *** Listing 14-8 ***
+;
+; Searches for the first appearance of a character, in any
+; case, in a byte-sized array by using JZ, DEC REG16, and
+; JNZ.
+;
+	jmp	Skip
+;
+ByteArray	label	byte
+	db	'Array Containing Both Upper and Lowercase'
+	db	' Characters And Blanks'
+ARRAY_LENGTH	equ	($-ByteArray)
+;
+; Finds the first occurrence of the specified character, in
+; any case, in the specified byte-sized array.
+;
+; Input:
+;	AL = character for which to perform a
+;		case-insensitive search
+;	CX = array length (0 means 64K long)
+;	DS:SI = array to search
+;
+; Output:
+;	SI = pointer to first case-insensitive match, or 0
+;		if no match is found
+;
+; Registers altered: AX, CX, SI
+;
+; Direction flag cleared
+;
+; Note: Does not handle arrays that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+; Note: Do not pass an array that starts at offset 0 (SI=0),
+;	since a match on the first byte and failure to find
+;	the byte would be indistinguishable.
+;
+CaseInsensitiveSearch:
+	cld
+	cmp	al,'a'
+	jb	CaseInsensitiveSearchBegin
+	cmp	al,'z'
+	ja	CaseInsensitiveSearchBegin
+	and	al,not 20h	;make sure the search byte
+				; is uppercase
+CaseInsensitiveSearchBegin:
+	mov	 ah,al		;put the search byte in AH
+				; so we can use AL to hold
+				; the bytes we're checking
+CaseInsensitiveSearchLoop:
+	lodsb			;get the next byte from the
+				; array being searched
+	cmp	al,'a'
+	jb	CaseInsensitiveSearchIsUpper
+	cmp	al,'z'
+	ja	CaseInsensitiveSearchIsUpper
+	and	al,not 20h	;make sure the array byte is
+				; uppercase
+CaseInsensitiveSearchIsUpper:
+	cmp	al,ah		;do we have a
+				; case-insensitive match?
+	jz	CaseInsensitiveSearchMatchFound	;yes
+	dec	cx		;count down bytes remaining
+				; in array being searched
+	jnz	CaseInsensitiveSearchLoop
+				;check the next byte, if any
+	sub	si,si		;no match found
+	ret
+CaseInsensitiveSearchMatchFound:
+	dec	si		;point back to the matching
+				; array byte
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	al,'K'		;character to search for
+	mov	si,offset ByteArray ;array to search
+	mov	cx,ARRAY_LENGTH	;# of bytes to search
+				; through
+	call	CaseInsensitiveSearch
+				;perform a case-insensitive
+				; search for 'K'
+	call	ZTimerOff
+```
+
+#### Listing 14-9
+```nasm
+;
+; *** Listing 14-9 ***
+;
+; Searches for the first appearance of a character, in any
+; case, in a byte-sized array by using JZ, DEC REG8, and
+; JNZ.
+;
+	jmp	Skip
+;
+ByteArray	label	byte
+	db	'Array Containing Both Upper and Lowercase'
+	db	' Characters And Blanks'
+ARRAY_LENGTH	equ	($-ByteArray)
+;
+; Finds the first occurrence of the specified character, in
+; any case, in the specified byte-sized array.
+;
+; Input:
+;	AL = character for which to perform a
+;		case-insensitive search
+;	CL = array length (0 means 256 long)
+;	DS:SI = array to search
+;
+; Output:
+;	SI = pointer to first case-insensitive match, or 0
+;		if no match is found
+;
+; Registers altered: AX, CL, SI
+;
+; Direction flag cleared
+;
+; Note: Does not handle arrays that are longer than 256
+;	bytes or cross segment boundaries.
+;
+; Note: Do not pass an array that starts at offset 0 (SI=0),
+;	since a match on the first byte and failure to find
+;	the byte would be indistinguishable.
+;
+CaseInsensitiveSearch:
+	cld
+	cmp	al,'a'
+	jb	CaseInsensitiveSearchBegin
+	cmp	al,'z'
+	ja	CaseInsensitiveSearchBegin
+	and	al,not 20h	;make sure the search byte
+				; is uppercase
+CaseInsensitiveSearchBegin:
+	mov	 ah,al		;put the search byte in AH
+				; so we can use AL to hold
+				; the bytes we're checking
+CaseInsensitiveSearchLoop:
+	lodsb			;get the next byte from the
+				; array being searched
+	cmp	al,'a'
+	jb	CaseInsensitiveSearchIsUpper
+	cmp	al,'z'
+	ja	CaseInsensitiveSearchIsUpper
+	and	al,not 20h	;make sure the array byte is
+				; uppercase
+CaseInsensitiveSearchIsUpper:
+	cmp	al,ah		;do we have a
+				; case-insensitive match?
+	jz	CaseInsensitiveSearchMatchFound	;yes
+	dec	cl		;count down bytes remaining
+				; in array being searched
+	jnz	CaseInsensitiveSearchLoop
+				;check the next byte, if any
+	sub	si,si		;no match found
+	ret
+CaseInsensitiveSearchMatchFound:
+	dec	si		;point back to the matching
+				; array byte
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	al,'K'		;character to search for
+	mov	si,offset ByteArray ;array to search
+	mov	cx,ARRAY_LENGTH	;# of bytes to search
+				; through
+	call	CaseInsensitiveSearch
+				;perform a case-insensitive
+				; search for 'K'
+	call	ZTimerOff
+```
+
+#### Listing 14-10
+```nasm
+;
+; *** Listing 14-10 ***
+;
+; Searches for the first appearance of a character, in any
+; case, in a byte-sized array by using JZ, DEC MEM8, and
+; JNZ.
+;
+	jmp	Skip
+;
+ByteArray	label	byte
+	db	'Array Containing Both Upper and Lowercase'
+	db	' Characters And Blanks'
+ARRAY_LENGTH	equ	($-ByteArray)
+BCount	db	?	;used to count down the # of bytes
+			; remaining in the array being
+			; searched (counter is byte-sized)
+;
+; Finds the first occurrence of the specified character, in
+; any case, in the specified byte-sized array.
+;
+; Input:
+;	AL = character for which to perform a
+;		case-insensitive search
+;	CL = array length (0 means 256 long)
+;	DS:SI = array to search
+;
+; Output:
+;	SI = pointer to first case-insensitive match, or 0
+;		if no match is found
+;
+; Registers altered: AX, SI
+;
+; Direction flag cleared
+;
+; Note: Does not handle arrays that are longer than 256
+;	bytes or cross segment boundaries.
+;
+; Note: Do not pass an array that starts at offset 0 (SI=0),
+;	since a match on the first byte and failure to find
+;	the byte would be indistinguishable.
+;
+CaseInsensitiveSearch:
+	cld
+	mov	[BCount],cl	;set the count variable
+	cmp	al,'a'
+	jb	CaseInsensitiveSearchBegin
+	cmp	al,'z'
+	ja	CaseInsensitiveSearchBegin
+	and	al,not 20h	;make sure the search byte
+				; is uppercase
+CaseInsensitiveSearchBegin:
+	mov	 ah,al		;put the search byte in AH
+				; so we can use AL to hold
+				; the bytes we're checking
+CaseInsensitiveSearchLoop:
+	lodsb			;get the next byte from the
+				; array being searched
+	cmp	al,'a'
+	jb	CaseInsensitiveSearchIsUpper
+	cmp	al,'z'
+	ja	CaseInsensitiveSearchIsUpper
+	and	al,not 20h	;make sure the array byte is
+				; uppercase
+CaseInsensitiveSearchIsUpper:
+	cmp	al,ah		;do we have a
+				; case-insensitive match?
+	jz	CaseInsensitiveSearchMatchFound	;yes
+	dec	[BCount]	;count down bytes remaining
+				; in array being searched
+				; (counter is byte-sized)
+	jnz	CaseInsensitiveSearchLoop
+				;check the next byte, if any
+	sub	si,si		;no match found
+	ret
+CaseInsensitiveSearchMatchFound:
+	dec	si		;point back to the matching
+				; array byte
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	al,'K'		;character to search for
+	mov	si,offset ByteArray ;array to search
+	mov	cx,ARRAY_LENGTH	;# of bytes to search
+				; through
+	call	CaseInsensitiveSearch
+				;perform a case-insensitive
+				; search for 'K'
+	call	ZTimerOff
+```
+
+#### Listing 14-11
+```nasm
+;
+; *** Listing 14-11 ***
+;
+; Searches for the first appearance of a character, in any
+; case, in a byte-sized array by using JZ, DEC MEM16, and
+; JNZ.
+;
+	jmp	Skip
+;
+ByteArray	label	byte
+	db	'Array Containing Both Upper and Lowercase'
+	db	' Characters And Blanks'
+ARRAY_LENGTH	equ	($-ByteArray)
+WCount	dw	?	;used to count down the # of bytes
+			; remaining in the array being
+			; searched (counter is word-sized)
+;
+; Finds the first occurrence of the specified character, in
+; any case, in the specified byte-sized array.
+;
+; Input:
+;	AL = character for which to perform a
+;		case-insensitive search
+;	CX = array length (0 means 64K long)
+;	DS:SI = array to search
+;
+; Output:
+;	SI = pointer to first case-insensitive match, or 0
+;		if no match is found
+;
+; Registers altered: AX, SI
+;
+; Direction flag cleared
+;
+; Note: Does not handle arrays that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+; Note: Do not pass an array that starts at offset 0 (SI=0),
+;	since a match on the first byte and failure to find
+;	the byte would be indistinguishable.
+;
+CaseInsensitiveSearch:
+	cld
+	mov	[WCount],cx	;set the count variable
+	cmp	al,'a'
+	jb	CaseInsensitiveSearchBegin
+	cmp	al,'z'
+	ja	CaseInsensitiveSearchBegin
+	and	al,not 20h	;make sure the search byte
+				; is uppercase
+CaseInsensitiveSearchBegin:
+	mov	 ah,al		;put the search byte in AH
+				; so we can use AL to hold
+				; the bytes we're checking
+CaseInsensitiveSearchLoop:
+	lodsb			;get the next byte from the
+				; array being searched
+	cmp	al,'a'
+	jb	CaseInsensitiveSearchIsUpper
+	cmp	al,'z'
+	ja	CaseInsensitiveSearchIsUpper
+	and	al,not 20h	;make sure the array byte is
+				; uppercase
+CaseInsensitiveSearchIsUpper:
+	cmp	al,ah		;do we have a
+				; case-insensitive match?
+	jz	CaseInsensitiveSearchMatchFound	;yes
+	dec	[WCount]	;count down bytes remaining
+				; in array being searched
+				; (counter is word-sized)
+	jnz	CaseInsensitiveSearchLoop
+				;check the next byte, if any
+	sub	si,si		;no match found
+	ret
+CaseInsensitiveSearchMatchFound:
+	dec	si		;point back to the matching
+				; array byte
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	al,'K'		;character to search for
+	mov	si,offset ByteArray ;array to search
+	mov	cx,ARRAY_LENGTH	;# of bytes to search
+				; through
+	call	CaseInsensitiveSearch
+				;perform a case-insensitive
+				; search for 'K'
+	call	ZTimerOff
+```
 
 [Listing 14-6](#listing-14-6) already shows the `loop`-based implementation. [Listings 14-8](#listing-14-8) through [14-11](#listing-14-11) show the other implementations. Here are the results:
 
@@ -785,7 +1758,9 @@ The only difference between call tables and jump tables is the type of branch ma
 
 The operation of a sample jump table is shown in Figure 14. 8.
 
-![](images/fig14.8RT.png)
+![Description](../images/fig14.8RT.png)
+
+**Figure 14.8**
 
 An index into the table is used to look up one of the entries in the table, and an indirect branch is performed to the address contained in that entry.
 
@@ -880,7 +1855,99 @@ Granted, pure jump table code would be slightly faster, since it's 2 instruction
 
 ### Generating Jump Table Indexes
 
-There are many ways to generate indexes into jump tables. Sometimes indexes are passed in as parameters by calling routines, as in a function dispatcher. Sometimes indexes are read from ports or from memory. Indexes may also be looked up in *other* tables. For example, a keyboard handler might use `repnz scasw` to find the index for the current 16-bit key code in a key-mapping table, then use that index to jump to the appropriate key-handling routine via a jump table, as shown in [Listing 14-12](#listing-14-12), which runs in 504 us for the sample keystrokes. ([Listing 14-12](#listing-14-12) is a modification of the key-handling jump table code we saw in [Listing 11-17](#listing-11-17).)
+There are many ways to generate indexes into jump tables. Sometimes indexes are passed in as parameters by calling routines, as in a function dispatcher. Sometimes indexes are read from ports or from memory. Indexes may also be looked up in *other* tables. For example, a keyboard handler might use `repnz scasw` to find the index for the current 16-bit key code in a key-mapping table, then use that index to jump to the appropriate key-handling routine via a jump table, as shown in [Listing 14-12](#listing-14-12), which runs in 504 us for the sample keystrokes. ([Listing 14-12](#listing-14-12) is a modification of the key-handling jump table code we saw in [Listing 11-17](chapter-11.md#listing-11-17).)
+
+#### Listing 14-12
+```nasm
+;
+; *** Listing 14-12 ***
+;
+; Demonstrates scanning a table with REPNZ SCASW in
+; order to generate an index to be used with a jump table.
+;
+	jmp	Skip
+;
+; Branches to the routine corresponding to the key code in
+; AX. Simply returns if no match is found.
+;
+; Input:
+;	AX = 16-bit key code, as returned by the BIOS
+;
+; Output: none
+;
+; Registers altered: CX, DI, ES
+;
+; Direction flag cleared
+;
+; Table of 16-bit key codes this routine handles.
+;
+KeyLookUpTable	label	word
+	dw	1e41h, 3042h, 2e43h, 2044h	;A-D
+	dw	1245h, 2146h, 2247h, 2347h	;E-H
+	dw	1749h, 244ah, 254bh, 264ch	;I-L
+	dw	324dh, 314eh, 184fh, 1950h	;M-P
+	dw	1051h, 1352h, 1f53h, 1454h	;Q-T
+	dw	1655h, 2f56h, 1157h, 2d58h	;U-X
+	dw	1559h, 2c5ah			;Y-Z
+KEY_LOOK_UP_TABLE_LENGTH_IN_WORDS equ (($-KeyLookUpTable)/2)
+;
+; Table of addresses to which to jump when the corresponding
+; key codes in KeyLookUpTable are found. All the entries
+; point to the same routine, since this is for illustrative
+; purposes only, but they could easily be changed to point
+; to any label in the code segment.
+;
+KeyJumpTable	label	word
+	dw	HandleA_Z, HandleA_Z, HandleA_Z, HandleA_Z
+	dw	HandleA_Z, HandleA_Z, HandleA_Z, HandleA_Z
+	dw	HandleA_Z, HandleA_Z, HandleA_Z, HandleA_Z
+	dw	HandleA_Z, HandleA_Z, HandleA_Z, HandleA_Z
+	dw	HandleA_Z, HandleA_Z, HandleA_Z, HandleA_Z
+	dw	HandleA_Z, HandleA_Z, HandleA_Z, HandleA_Z
+	dw	HandleA_Z, HandleA_Z
+;
+VectorOnKey	proc	near
+	mov	di,cs
+	mov	es,di
+	mov	di,offset KeyLookUpTable
+			;point ES:DI to the table of keys
+			; we handle, which is in the same
+			; code segment as this routine
+	mov	cx,KEY_LOOK_UP_TABLE_LENGTH_IN_WORDS
+			;# of words to scan
+	cld
+	repnz	scasw	;look up the key
+	jnz	VectorOnKeyDone	;it's not in the table, so
+				; we're done
+	jmp	cs:[KeyJumpTable+di-2-offset KeyLookUpTable]
+			;jump to the routine for this key
+			; Note that:
+			;   DI-2-offset KeyLookUpTable
+			; is the offset in KeyLookUpTable of
+			; the key we found, with the -2
+			; needed to compensate for the
+			; 2-byte (1-word) overrun of SCASW
+HandleA_Z:
+VectorOnKeyDone:
+	ret
+VectorOnKey	endp
+;
+Skip:
+	call	ZTimerOn
+	mov	ax,1e41h
+	call	VectorOnKey	;look up 'A'
+	mov	ax,1749h
+	call	VectorOnKey	;look up 'I'
+	mov	ax,1f53h
+	call	VectorOnKey	;look up 'S'
+	mov	ax,2c5ah
+	call	VectorOnKey	;look up 'Z'
+	mov	ax,0
+	call	VectorOnKey	;finally, look up a key
+				; code that's not in the
+				; table
+	call	ZTimerOff
+```
 
 Why not simply put the address of each key handler right next to the corresponding 16-bit key code in a single look-up table, so no calculation is needed in order to perform the second look-up? For one thing, the second look-up takes hardly any time at all in [Listing 14-12](#listing-14-12), since the calculation of the jump table address is performed as a *mod-reg-rm* calculation by:
 
@@ -892,6 +1959,92 @@ Even if the second look-up were slow, however, the two-table approach would stil
 
 Does it really make that much difference to structure the table so that `rep scasw` can be used? It surely does. [Listing 14-13](#listing-14-13), which uses a single look-up table containing both key codes and handler addresses, takes 969 us to run—nearly twice as long as [Listing 14-12](#listing-14-12).
 
+#### Listing 14-13
+```nasm
+;
+; *** Listing 14-13 ***
+;
+; Demonstrates that it's much slower to scan a table
+; in a loop than to use REP SCASW; look-up tables should
+; be designed so that repeated string instructions can be
+; used.
+;
+	jmp	Skip
+;
+; Branches to the routine corresponding to the key code in
+; AX. Simply returns if no match is found.
+;
+; Input:
+;	AX = 16-bit key code, as returned by the BIOS
+;
+; Output: none
+;
+; Registers altered: CX, DI, ES
+;
+; Direction flag cleared
+;
+; Table of 16-bit key codes this routine handles, each
+; paired with the address to jump to if that key code is
+; found.
+;
+KeyLookUpTable	label	word
+	dw	1e41h, HandleA_Z, 3042h, HandleA_Z	;A-B
+	dw	2e43h, HandleA_Z, 2044h, HandleA_Z	;C-D
+	dw	1245h, HandleA_Z, 2146h, HandleA_Z	;E-F
+	dw	2247h, HandleA_Z, 2347h, HandleA_Z	;G-H
+	dw	1749h, HandleA_Z, 244ah, HandleA_Z	;I-J
+	dw	254bh, HandleA_Z, 264ch, HandleA_Z	;K-L
+	dw	324dh, HandleA_Z, 314eh, HandleA_Z	;M-N
+	dw	184fh, HandleA_Z, 1950h, HandleA_Z	;O-P
+	dw	1051h, HandleA_Z, 1352h, HandleA_Z	;Q-R
+	dw	1f53h, HandleA_Z, 1454h, HandleA_Z	;S-T
+	dw	1655h, HandleA_Z, 2f56h, HandleA_Z	;U-V
+	dw	1157h, HandleA_Z, 2d58h, HandleA_Z	;W-X
+	dw	1559h, HandleA_Z, 2c5ah, HandleA_Z	;Y-Z
+KEY_LOOK_UP_TABLE_LEN_IN_ENTRIES equ (($-KeyLookUpTable)/4)
+;
+VectorOnKey	proc	near
+	mov	di,cs
+	mov	es,di
+	mov	di,offset KeyLookUpTable
+			;point ES:DI to the table of keys
+			; we handle, which is in the same
+			; code segment as this routine
+	mov	cx,KEY_LOOK_UP_TABLE_LEN_IN_ENTRIES
+			;# of entries to scan
+	cld
+VectorOnKeyLoop:
+	scasw
+	jz	VectorOnKeyJump	;we've found the key code
+	inc	di		;point to the next entry
+	inc	di
+	loop	VectorOnKeyLoop
+	ret			;the key code is not in the
+				; table, so we're done
+VectorOnKeyJump:
+	jmp	word ptr cs:[di]
+			;jump to the routine for this key
+HandleA_Z:
+	ret
+VectorOnKey	endp
+;
+Skip:
+	call	ZTimerOn
+	mov	ax,1e41h
+	call	VectorOnKey	;look up 'A'
+	mov	ax,1749h
+	call	VectorOnKey	;look up 'I'
+	mov	ax,1f53h
+	call	VectorOnKey	;look up 'S'
+	mov	ax,2c5ah
+	call	VectorOnKey	;look up 'Z'
+	mov	ax,0
+	call	VectorOnKey	;finally, look up a key
+				; code that's not in the
+				; table
+	call	ZTimerOff
+```
+
 Design your code to use repeated string instructions!
 
 At any rate, jump tables operate in the same basic way no matter how indexes are generated; an index is used to look up an address to branch to. The rule as to when you should use a jump table is equally simple: whenever you find yourself branching to one of several addresses based on one of a set of consecutive values, you should almost certainly use a jump table. If the values aren't consecutive but are bunched, you might want to use the partial jump table approach, filtering out the oddball cases and branching on those that are tightly grouped. Finally, if speed is paramount, the pure jump table approach is the way to go, even if that means making a large table containing many unused or duplicate entries.
@@ -900,7 +2053,9 @@ At any rate, jump tables operate in the same basic way no matter how indexes are
 
 In the last chapter, we simply calculated the destination offset whenever we needed to branch into in-line code. That approach is fine when the offset calculations involve nothing more than a few shifts and adds, but it can reduce performance considerably if a `mul` instruction must be used. Then, too, the calculated-offset approach only works if every repeated code block in the target in-line code is exactly the same size. That won't be the case if, for example, some repeated code blocks use short branches while others use normal branches, as shown in Figure 14.9.
 
-![](images/fig14.9RT.png)
+![Description](../images/fig14.9RT.png)
+
+**Figure 14.9**
 
 In such a case, a jump table is the preferred solution. Selecting an offset and branching to it through a jump table takes only a few instructions, and is certainly faster than multiplying. Jump tables can also handle repeated in-line code blocks of varying sizes, since jump tables store offsets that can point anywhere and can be arranged in any order, rather than being limited to calculations based on a fixed block size.
 
@@ -911,6 +2066,170 @@ What we really want to do is use conditional jumps in some in-line code blocks�
 The answer (surprise!) is to use a jump table, as shown in [Listing 14-14](#listing-14-14). The jump table simply stores the start offset of each in-line code block, regardless of how large that block may be. While the jump table is 162 bytes in size, there's no speed penalty for using it, since the process of looking up a table entry and branching accordingly requires only a few instructions. Indeed, it's often faster to use a jump table in this way than it is to calculate the target offset even when the repeated in-line code blocks *are* all the same size.
 
 How does [Listing 14-14](#listing-14-14) generate in-line code blocks of varying sizes? The macro `CHECK_CHAR`, which is used to generate each in-line code block, actually calculates the distance from the end of each conditional jump to the target label, and uses the `if` directive to assemble a single conditional jump if a 1-byte displacement will reach the target label, or a conditional jump around an unconditional jump if necessary. In some cases a conditional jump does reach, while in others it doesn't; as a result, the in-line code blocks vary in size.
+
+#### Listing 14-14
+```nasm
+;
+; *** Listing 14-14 ***
+;
+; Demonstrates the use of a jump table to branch into
+; in-line code consisting of repeated code blocks of
+; varying lengths. The approach of using a jump table to
+; branch into in-line code is speedy enough that
+; it's often preferable even when all the repeated code
+; blocks are the same size, although the jump table does
+; take extra space.
+;
+; Searches up to N bytes of a zero-terminated string for
+; a character.
+;
+	jmp	Skip
+TestString	label	byte
+	db	'This is a string containing the letter '
+	db	'z but not containing capital q', 0
+;
+; Searches a zero-terminated string for a character.
+; Searches until a match is found, the terminating zero
+; is found, or the specified number of characters have been
+; checked.
+;
+; Input:
+;	AL = character to search for
+;	BX = maximum # of characters to search. Must be
+;		less than or equal to 80
+;	DS:SI = string to search
+;
+; Output:
+;	SI = pointer to character, or 0 if character not
+;		found
+;
+; Registers altered: AX, BX, SI
+;
+; Direction flag cleared
+;
+; Note: Don't pass a string starting at offset 0, since a
+;	match there couldn't be distinguished from a failure
+;	to match.
+;
+MAX_SEARCH_LENGTH equ	80	;longest supported search
+				; length
+;
+; Macro to create SearchTable entries.
+;
+MAKE_CHECK_CHAR_LABEL	macro	NUMBER
+	dw	CheckChar&NUMBER&
+	endm
+;
+; Macro to create in-line code to search 1 character.
+; Gives the code block a unique label according to NUMBER.
+; Each conditional branch uses the shortest possible jump
+; sequence to reach NoMatch and MatchFound.
+;
+CHECK_CHAR	macro	NUMBER
+	local	CheckMatch, Continue
+CheckChar&NUMBER&:
+	lodsb		;get the character
+	and	al,al	;done if terminating zero
+;
+; Assemble a single conditional jump if it'll reach, or
+; a conditional jump around an unconditional jump if the
+; 1-byte displacement of a conditional jump won't reach.
+;
+if ($+2-NoMatch) le 128
+	jz	NoMatch
+else
+	jnz	CheckMatch
+	jmp	NoMatch
+endif
+CheckMatch:
+	cmp	ah,al	;done if matches search character
+;
+; Again, assemble shortest possible jump sequence.
+;
+if ($+2-MatchFound) le 128
+	jz	MatchFound
+else
+	jnz	Continue
+	jmp	MatchFound
+endif
+Continue:
+	endm
+;
+; Table of in-line code entry points for maximum search
+; lengths of 0 through 80.
+;
+SearchTable	label	word
+	dw	NoMatch		;we never match on a
+				; maximum length of 0
+BLOCK_NUMBER=MAX_SEARCH_LENGTH-1
+	rept	MAX_SEARCH_LENGTH
+	MAKE_CHECK_CHAR_LABEL	%BLOCK_NUMBER
+BLOCK_NUMBER=BLOCK_NUMBER-1
+	endm
+;
+SearchNBytes	proc	near
+	mov	ah,al		;we'll need AL for LODSB
+	cmp	bx,MAX_SEARCH_LENGTH
+	ja	NoMatch		;if the maximum length's
+				; too long for the in-line
+				; code, return a no-match
+				; status
+	shl	bx,1		;*2 to look up in word-sized
+				; table
+	jmp	[SearchTable+bx] ;branch into the in-line
+				; code to do the search
+;
+; No match was found.
+;
+NoMatch:
+	sub	si,si		;return no-match status
+	ret
+;
+; A match was found.
+;
+MatchFound:
+	dec	si		;point back to matching
+				; location
+	ret
+;
+; This is the in-line code that actually does the search.
+; Each repetition is uniquely labelled, with the labels
+; running from CheckChar0 through CheckChar79.
+;
+BLOCK_NUMBER=0
+;
+; These in-line blocks use 1-byte displacements whenever
+; possible to branch backward; otherwise 2-byte
+; displacements are used to branch backward, with
+; conditional jumps around unconditional jumps.
+;
+	rept	MAX_SEARCH_LENGTH
+	CHECK_CHAR	%BLOCK_NUMBER
+BLOCK_NUMBER=BLOCK_NUMBER+1
+	endm
+;
+; If we make it here, we haven't found the character.
+;
+	sub	si,si	;return no-match status
+	ret
+SearchNBytes	endp
+;
+Skip:
+	call	ZTimerOn
+	mov	al,'Q'
+	mov	bx,20			;search up to the
+	mov	si,offset TestString	; first 20 bytes of
+	call	SearchNBytes		; TestString for 'Q'
+	mov	al,'z'
+	mov	bx,80			;search up to the
+	mov	si,offset TestString	; first 80 bytes of
+	call	SearchNBytes		; TestString for 'z'
+	mov	al,'a'
+	mov	bx,10			;search up to the
+	mov	si,offset TestString	; first 10 bytes of
+	call	SearchNBytes		; TestString for 'a'
+	call	ZTimerOff
+```
 
 [Listing 14-14](#listing-14-14) illustrates the use of a clever technique that's most useful for generating jump tables that point to in-line code: macro text substitution. In order to generate a unique label for each repeated code block, the assembler variable `BLOCK_NUMBER` is initially set to zero, and then incremented each time a new code block is created. (Note that `BLOCK_NUMBER` is a variable used during assembly, not a variable used by the assembler program. Such variables are used to control assembly, and the program being assembled has no knowledge of them at run time.)
 
@@ -973,11 +2292,93 @@ BLOCK_NUMBER=BLOCK_NUMBER-1
 
 [Listing 14-14](#listing-14-14) puts all of the above together, creating and using unique labels in both the in-line code and the jump table. Figure 14.10 illustrates [Listing 14-14](#listing-14-14) in action.
 
-![](images/fig14.10RT.png)
+![Description](../images/fig14.10RT.png)
+
+**Figure 14.10**
 
 Study both the listing and the figure carefully, for macros, repeat blocks, jump tables, and in-line code working together are potent indeed.
 
 Now for the kicker: all that fancy coding actually doesn't even pay off in this particular case. [Listing 14-14](#listing-14-14) runs in 1013 us. [Listing 14-15](#listing-14-15), which uses a standard loop approach, runs in 988 us! Not only is [Listing 14-15](#listing-14-15) faster, but it's also hundreds of bytes shorter and much simpler than [Listing 14-14](#listing-14-14)—and, unlike [Listing 14-14](#listing-14-14), [Listing 14-15](#listing-14-15) can handle strings of any length. Frankly, there's no reason to recommend [Listing 14-14](#listing-14-14) over [Listing 14-15](#listing-14-15), and good reason not to.
+
+#### Listing 14-15
+```nasm
+;
+; *** Listing 14-15 ***
+;
+; For comparison with the in-line-code-branched-to-via-a-
+; jump-table approach of Listing 14-14, this is a loop-based
+; string-search routine that searches at most the specified
+; number of bytes of a zero-terminated string for the
+; specified character.
+;
+	jmp	Skip
+TestString	label	byte
+	db	'This is a string containing the letter '
+	db	'z but not containing capital q', 0
+;
+; Searches a zero-terminated string for a character.
+; Searches until a match is found, the terminating zero
+; is found, or the specified number of characters have been
+; checked.
+;
+; Input:
+;	AL = character to search for
+;	BX = maximum # of characters to search
+;	DS:SI = string to search
+;
+; Output:
+;	SI = pointer to character, or 0 if character not
+;		found
+;
+; Registers altered: AX, CX, SI
+;
+; Direction flag cleared
+;
+; Note: Don't pass a string starting at offset 0, since a
+;	match there couldn't be distinguished from a failure
+;	to match.
+;
+SearchNBytes	proc	near
+	mov	ah,al		;we'll need AL for LODSB
+	mov	cx,bx		;for LOOP
+SearchNBytesLoop:
+	lodsb
+	and	al,al
+	jz	NoMatch		;terminating 0, so no match
+	cmp	ah,al
+	jz	MatchFound	;match, so we're done
+	loop	SearchNBytesLoop
+;
+; No match was found.
+;
+NoMatch:
+	sub	si,si	;return no-match status
+	ret
+;
+; A match was found.
+;
+MatchFound:
+	dec	si		;point back to matching
+				; location
+	ret
+SearchNBytes	endp
+;
+Skip:
+	call	ZTimerOn
+	mov	al,'Q'
+	mov	bx,20			;search up to the
+	mov	si,offset TestString	; first 20 bytes of
+	call	SearchNBytes		; TestString for 'Q'
+	mov	al,'z'
+	mov	bx,80			;search up to the
+	mov	si,offset TestString	; first 80 bytes of
+	call	SearchNBytes		; TestString for 'z'
+	mov	al,'a'
+	mov	bx,10			;search up to the
+	mov	si,offset TestString	; first 10 bytes of
+	call	SearchNBytes		; TestString for 'a'
+	call	ZTimerOff
+```
 
 Why have I spent all this time developing *slower* code? Forget the specific example: the idea was to show you how jump tables can be used to branch into in-line code, even when the in-line code consists of code blocks of varying lengths. The particular example I chose doesn't benefit from these techniques because it was selected for illustrative rather than practical purposes. While there are good applications for jump tables that branch into in-line code—plenty of them!—they tend to be lengthy and complex, and I decided to choose an example that was short enough so that the decidedly non-obvious techniques used could be readily understood.
 
@@ -986,6 +2387,198 @@ Why does this particular example not benefit much from the use of branched to in
 In truth, the best way to speed up this code would be partial in-line code, which would allow *all* the branches to use 1-byte displacements. A double-scan approach, using a repeated string instruction to search for the terminating zero and then another string instruction to search for the desired character, might also serve well.
 
 Just to demonstrate the flexibility of macros, jump tables, and branched-to in-line code, however, [Listing 14-16](#listing-14-16) is a modification of [Listing 14-14](#listing-14-14) that branches out with 1-byte displacements at *both* ends of the in-line code, using conditional jumps around unconditional jumps only in the middle of the in-line code, where 1-byte displacements can't reach past either end. As predicted, [Listing 14-16](#listing-14-16) is, at 908 us, a good bit faster than [Listings 14-14](#listing-14-14) and [14-15](#listing-14-15). (Bear in mind that the relative performances of these listings could change considerably given different search parameters. *There is no such thing as absolute performance*. Know the conditions under which your code will run!)
+
+#### Listing 14-16
+```nasm
+;
+; *** Listing 14-16 ***
+;
+; Demonstrates the use of a jump table to branch into
+; in-line code consisting of repeated code blocks of
+; varying lengths. Branches out of the in-line code with
+; 1-byte displacements at both ends of the in-line code,
+; for improved speed.
+;
+; Searches up to N bytes of a zero- terminated string for
+; a character.
+;
+	jmp	Skip
+TestString	label	byte
+	db	'This is a string containing the letter '
+	db	'z but not containing capital q', 0
+;
+; Searches a zero-terminated string for a character.
+; Searches until a match is found, the terminating zero
+; is found, or the specified number of characters has been
+; checked.
+;
+; Input:
+;	AL = character to search for
+;	BX = maximum # of characters to search. Must be
+;		less than or equal to MAX_SEARCH_LENGTH
+;	DS:SI = string to search
+;
+; Output:
+;	SI = pointer to character, or 0 if character not
+;		found
+;
+; Registers altered: AX, BX, SI
+;
+; Direction flag cleared
+;
+; Note: Don't pass a string starting at offset 0, since a
+;	match there couldn't be distinguished from a failure
+;	to match.
+;
+MAX_SEARCH_LENGTH equ	80	;longest supported search
+				; length
+;
+; Macro to create SearchTable entries.
+;
+MAKE_CHECK_CHAR_LABEL	macro	NUMBER
+	dw	CheckChar&NUMBER&
+	endm
+;
+; Macro to create in-line code to search 1 character.
+; Gives the code block a unique label according to NUMBER.
+; Each conditional branch uses the shortest possible jump
+; sequence to reach NoMatch and MatchFound.
+;
+CHECK_CHAR	macro	NUMBER
+	local	CheckMatch, Continue
+CheckChar&NUMBER&:
+	lodsb		;get the character
+	and	al,al	;done if terminating zero
+;
+; Assemble a single conditional jump if it'll reach, or
+; a conditional jump around an unconditional jump if the
+; 1-byte displacement of a conditional jump won't reach.
+;
+if ($+2-NoMatch) le 128
+	jz	NoMatch
+else
+	jnz	CheckMatch
+	jmp	NoMatch
+endif
+CheckMatch:
+	cmp	ah,al	;done if matches search character
+;
+; Again, assemble shortest possible jump sequence.
+;
+if ($+2-MatchFound) le 128
+	jz	MatchFound
+else
+	jnz	Continue
+	jmp	MatchFound
+endif
+Continue:
+	endm
+;
+; Macro to create in-line code to search 1 character.
+; Gives the code block a unique label according to NUMBER.
+; All branches use a 1-byte displacement to branch to
+; NoMatch2 and MatchFound2.
+;
+CHECK_CHAR2	macro	NUMBER
+CheckChar&NUMBER&:
+	lodsb		;get the character
+	and	al,al	;done if terminating zero
+	jz	NoMatch2
+	cmp	ah,al	;done if matches search character
+	jz	MatchFound2
+	endm
+;
+; Table of in-line code entry points for maximum search
+; lengths of 0 through 80.
+;
+SearchTable	label	word
+	dw	NoMatch		;we never match on a
+				; maximum length of 0
+BLOCK_NUMBER=MAX_SEARCH_LENGTH-1
+	rept	MAX_SEARCH_LENGTH
+	MAKE_CHECK_CHAR_LABEL	%BLOCK_NUMBER
+BLOCK_NUMBER=BLOCK_NUMBER-1
+	endm
+;
+SearchNBytes	proc	near
+	mov	ah,al		;we'll need AL for LODSB
+	cmp	bx,MAX_SEARCH_LENGTH
+	ja	NoMatch		;if the maximum length's
+				; too long for the in-line
+				; code, return a no-match
+				; status
+	shl	bx,1		;*2 to look up in word-sized
+				; table
+	jmp	[SearchTable+bx] ;branch into the in-line
+				; code to do the search
+;
+; No match was found.
+;
+NoMatch:
+	sub	si,si		;return no-match status
+	ret
+;
+; A match was found.
+;
+MatchFound:
+	dec	si		;point back to matching
+				; location
+	ret
+;
+; This is the in-line code that actually does the search.
+; Each repetition is uniquely labelled, with labels
+; CheckChar0 through CheckChar79.
+;
+BLOCK_NUMBER=0
+;
+; These in-line code blocks use 1-byte displacements
+; whenever possible to branch backward; otherwise 2-byte
+; displacements are used to branch backwards, with
+; conditional jumps around unconditional jumps.
+;
+	rept	MAX_SEARCH_LENGTH-14
+	CHECK_CHAR	%BLOCK_NUMBER
+BLOCK_NUMBER=BLOCK_NUMBER+1
+	endm
+;
+; These in-line code blocks use 1-byte displacements to
+; branch forward.
+;
+	rept	14
+	CHECK_CHAR2	%BLOCK_NUMBER
+BLOCK_NUMBER=BLOCK_NUMBER+1
+	endm
+;
+; If we make it here, we haven't found the character.
+;
+NoMatch2:
+	sub	si,si	;return no-match status
+	ret
+;
+; A match was found.
+;
+MatchFound2:
+	dec	si		;point back to matching
+				; location
+	ret
+SearchNBytes	endp
+;
+Skip:
+	call	ZTimerOn
+	mov	al,'Q'
+	mov	bx,20			;search up to the
+	mov	si,offset TestString	; first 20 bytes of
+	call	SearchNBytes		; TestString for 'Q'
+	mov	al,'z'
+	mov	bx,80			;search up to the
+	mov	si,offset TestString	; first 80 bytes of
+	call	SearchNBytes		; TestString for 'z'
+	mov	al,'a'
+	mov	bx,10			;search up to the
+	mov	si,offset TestString	; first 10 bytes of
+	call	SearchNBytes		; TestString for 'a'
+	call	ZTimerOff
+```
 
 [Listing 14-16](#listing-14-16) isn't *blazingly* fast, but it is fast enough to remind us that branched-to in-line code is a most attractive option... and now jump tables let us use branched-to in-line code in more situations than ever, and often with improved speed, as well.
 
@@ -1017,7 +2610,7 @@ A final note: macros can easily obscure the true nature of your code, since you 
 
 All of the wonderful branching tricks we've encountered in this chapter notwithstanding, you're still better off from a performance perspective when you don't branch. Granted, branching can often be beneficial from a code-size perspective, but performance is more often an issue than is size. Also, the improvements in performance that can be achieved by not-branching are relatively far greater than the improvements in size that can be achieved by judicious branching.
 
-Think back again to [Listing 11-27](#listing-11-27), in which we sped up a case-insensitive string comparison considerably simply by looking up the uppercase version of each character in a table instead of using a mere five instructions—and at most one branch—to convert each character to uppercase. *Only rarely can code-only calculations, especially calculations that involve branching, beat table look-ups.* What's more, we could speed the code up a good deal more by using pure or partial in-line code rather than looping every two characters. If we wanted to, we could effectively eliminate nearly every single branch in the string-comparison code—and the code would be much the faster for it.
+Think back again to [Listing 11-27](chapter-11.md#listing-11-27), in which we sped up a case-insensitive string comparison considerably simply by looking up the uppercase version of each character in a table instead of using a mere five instructions—and at most one branch—to convert each character to uppercase. *Only rarely can code-only calculations, especially calculations that involve branching, beat table look-ups.* What's more, we could speed the code up a good deal more by using pure or partial in-line code rather than looping every two characters. If we wanted to, we could effectively eliminate nearly every single branch in the string-comparison code—and the code would be much the faster for it.
 
 No matter how tight your code is, if it branches it *can* be made faster. Whether it *is* made faster is purely a matter of: a) your ability to bring techniques such as table look-ups and in-line code to bear, and b) your willingness to trade the extra bytes those techniques require for the cycles they save. To that list I might add a third, slightly different condition: c) the degree to which the performance of the code matters.
 
