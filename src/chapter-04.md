@@ -21,7 +21,9 @@ The major cycle-eaters are:
 
 The locations of these cycle-eaters in the PC are shown in Figure 4.1. We'll cover each of the cycle-eaters in turn in this chapter. The material won't be easy, since cycle-eaters are among the most subtle aspects of assembler programming. By the same token, however, this will be one of the most important and rewarding chapters in this book. Don't worry if you don't catch everything in this chapter, but do read it all even if the going gets a bit tough. Cycle-eaters play a key role in later chapters, so some familiarity with them is highly desirable. Then, too, those later chapters illustrate cycle-eaters in action, which should help clear up any aspects of cycle-eaters about which you're uncertain.
 
-![**Figure 4.1** The locations of the major cycle eaters in the IBM PC. Note that all the cycle eaters are external to the execution unit of the 8088.](images/fig4.1RT.png)
+[Description](../images/fig4.1RT.png)
+
+**Figure 4.1** The locations of the major cycle eaters in the IBM PC. Note that all the cycle eaters are external to the execution unit of the 8088.
 
 ## The 8-Bit Bus Cycle-Eater
 
@@ -33,7 +35,9 @@ Fans of the 8088 call it a 16-bit processor. Fans of other 16-bit processors cal
 
 As we saw in Chapter 3, the 8088 is internally a full 16-bit processor, equivalent to an 8086. In terms of the instruction set, the 8088 is clearly a 16-bit processor, capable of performing any given 16-bit operation—addition, subtraction, even multiplication or division—with a single instruction. Externally, however, the 8088 is unequivocally an 8-bit processor, since the external data bus is only 8 bits wide. In other words, the programming interface is 16 bits wide, but the hardware interface is only 8 bits wide, as shown in Figure 4.2. The result of this mismatch is simple: word-sized data can be transferred between the 8088 and memory or peripherals at only one-half the maximum rate of the 8086, which is to say one-half the maximum rate for which the Execution Unit of the 8088 was designed.
 
-![**Figure 4.2** Internally the 8088 is a 16-bit microprocessor, but externally the 8088 is only an 8-bit microprocessor.](images/fig4.2RT.png)
+[Description](../images/fig4.2RT.png)
+
+**Figure 4.2** Internally the 8088 is a 16-bit microprocessor, but externally the 8088 is only an 8-bit microprocessor.
 
 As shown in Figure 4.1, the 8-bit bus cycle-eater lies squarely on the 8088's external data bus. Technically, it might be more accurate to place this cycle-eater in the Bus Interface Unit, which breaks 16-bit memory accesses into paired 8-bit accesses, but it is really the limited width of the external data bus that constricts data flow into and out of the 8088. True, the PC's bus is also only 8 bits wide, but that's just to match the 8088's 8-bit bus; even if the PC's bus were 16 bits wide, data could still pass into and out of the 8088 only 1 byte at a time.
 
@@ -47,13 +51,13 @@ One obvious effect of the 8-bit bus cycle-eater is that word-sized accesses to m
 mov ax,word ptr [MemVar]
 ```
 
-takes 4 cycles longer to read the word at address `MemVar`{.nasm} than:
+takes 4 cycles longer to read the word at address `MemVar` than:
 
 ```nasm
 mov al,byte ptr [MemVar]
 ```
 
-takes to read the byte at address `MemVar`{.nasm}. (Actually, the difference between the two isn't very likely to be exactly 4 cycles, for reasons that will become clear when we discuss the prefetch queue and dynamic RAM refresh cycle-eaters later in this chapter.)
+takes to read the byte at address `MemVar`. (Actually, the difference between the two isn't very likely to be exactly 4 cycles, for reasons that will become clear when we discuss the prefetch queue and dynamic RAM refresh cycle-eaters later in this chapter.)
 
 What's more, in some cases one instruction can perform multiple word-sized accesses, incurring that 4-cycle penalty on each access. For example, adding a value to a word-sized memory variable requires 2 word-sized accesses—one to read the destination operand from memory prior to adding to it, and one to write the result of the addition back to the destination operand—and thus incurs not one but two 4-cycle penalties. As a result:
 
@@ -67,7 +71,7 @@ takes about 8 cycles longer to execute than:
 add byte ptr [MemVar],al
 ```
 
-String instructions can suffer from the 8-bit bus cycle-eater to a greater extent than other instructions. Believe it or not, a single `rep movsw`{.nasm} instruction can lose as much as:
+String instructions can suffer from the 8-bit bus cycle-eater to a greater extent than other instructions. Believe it or not, a single `rep movsw` instruction can lose as much as:
 
 **524,280 cycles = 131,070 word-sized memory accesses x 4 cycles**
 
@@ -77,9 +81,49 @@ The upshot of all this is simply that the 8088 can transfer word-sized data to a
 
 ### What to Do About the 8-Bit Bus Cycle-Eater?
 
-The obvious implication of the 8-bit bus cycle-eater is that byte-sized memory variables should be used whenever possible. After all, the 8088 performs *byte-sized* memory accesses just as quickly as the 8086. For instance, [Listing 4-1](#listing-4-1), which uses a byte-sized memory variable as a loop counter, runs in 10.03 us per loop. That's 20% faster than the 12.05 us per loop execution time of [Listing 4-2](#listing-4-2), which uses a word-sized counter. Why the difference in execution times? Simply because each word-sized `dec`{.nasm} performs 4 byte-sized memory accesses (2 to read the word-sized operand and 2 to write the result back to memory), while each byte-sized `dec`{.nasm} performs only 2 byte-sized memory accesses in all.
+#### Listing 4-1
+```
+;
+; *** Listing 4-1 ***
+;
+; Measures the performance of a loop which uses a
+; byte-sized memory variable as the loop counter.
+;
+	jmp	Skip
+;
+Counter	db	100
+;
+Skip:
+	call	ZTimerOn
+LoopTop:
+	dec	[Counter]
+	jnz	LoopTop
+	call	ZTimerOff
+```
 
-I'd like to make a brief aside concerning code optimization in the listings in this book. Throughout this book I've modeled the sample code after working code so that the timing results are applicable to real-world programming. In [Listings 4-1](#listing-4-1) and [4-2](#listing-4-2), for instance, I could have shown a still greater advantage for byte-sized operands simply by performing 1000 `dec`{.nasm} instructions in a row, with no branching at all. However, `dec`{.nasm} instructions don't exist in a vacuum, so in the listings I used code that both decremented the counter and tested the result. The difference is that between decrementing a memory location (simply an instruction) and using a loop counter (a functional instruction sequence). If you come across code in *The Zen of Assembly Language* that seems less than optimal, my desire to provide code that's relevant to real programming problems may be the reason. On the other hand, optimal code is an elusive thing indeed; by no means should you assume that the code in this book is ideal! Examine it, question it, and improve upon it, for an inquisitive, skeptical mind is an important part of the Zen of assembler.
+The obvious implication of the 8-bit bus cycle-eater is that byte-sized memory variables should be used whenever possible. After all, the 8088 performs *byte-sized* memory accesses just as quickly as the 8086. For instance, [Listing 4-1](#listing-4-1), which uses a byte-sized memory variable as a loop counter, runs in 10.03 us per loop. That's 20% faster than the 12.05 us per loop execution time of [Listing 4-2](#listing-4-2), which uses a word-sized counter. Why the difference in execution times? Simply because each word-sized `dec` performs 4 byte-sized memory accesses (2 to read the word-sized operand and 2 to write the result back to memory), while each byte-sized `dec` performs only 2 byte-sized memory accesses in all.
+
+#### Listing 4-2
+```
+;
+; *** Listing 4-2 ***
+;
+; Measures the performance of a loop which uses a
+; word-sized memory variable as the loop counter.
+;
+	jmp	Skip
+;
+Counter	dw	100
+;
+Skip:
+	call	ZTimerOn
+LoopTop:
+	dec	[Counter]
+	jnz	LoopTop
+	call	ZTimerOff
+```
+
+I'd like to make a brief aside concerning code optimization in the listings in this book. Throughout this book I've modeled the sample code after working code so that the timing results are applicable to real-world programming. In [Listings 4-1](#listing-4-1) and [4-2](#listing-4-2), for instance, I could have shown a still greater advantage for byte-sized operands simply by performing 1000 `dec` instructions in a row, with no branching at all. However, `dec` instructions don't exist in a vacuum, so in the listings I used code that both decremented the counter and tested the result. The difference is that between decrementing a memory location (simply an instruction) and using a loop counter (a functional instruction sequence). If you come across code in *The Zen of Assembly Language* that seems less than optimal, my desire to provide code that's relevant to real programming problems may be the reason. On the other hand, optimal code is an elusive thing indeed; by no means should you assume that the code in this book is ideal! Examine it, question it, and improve upon it, for an inquisitive, skeptical mind is an important part of the Zen of assembler.
 
 Back to the 8-bit bus cycle-eater. As I've said, you should strive to use byte-sized memory variables whenever possible. That does *not* mean that you should use 2 byte-sized memory accesses to manipulate a word-sized memory variable in preference to 1 word-sized memory access, as, for instance, with:
 
@@ -96,7 +140,37 @@ mov dx,word ptr [MemVar]
 
 Recall that every access to a memory byte takes at least 4 cycles; that limitation is built right into the 8088. The 8088 is also built so that the second byte-sized memory access to a 16-bit memory variable takes just those 4 cycles and no more. There's no way you can manipulate the second byte of a word-sized memory variable faster with a second separate byte-sized instruction in less than 4 cycles. As a matter of fact, you're bound to access that second byte much more slowly with a separate instruction, thanks to the overhead of instruction fetching and execution, address calculation, and the like.
 
-For example, consider [Listing 4-3](#listing-4-3), which performs 1000 word-sized reads from memory. This code runs in 3.77 us per word read. That's 45% faster than the 5.49 us per word read of [Listing 4-4](#listing-4-4), which reads the same 1000 words as [Listing 4-3](#listing-4-3) but does so with 2000 byte-sized reads. Both listings perform exactly the same number of memory accesses—2000 accesses, each byte-sized, as all 8088 memory accesses must be. (Remember that the Bus Interface Unit must perform two byte-sized memory accesses in order to handle a word-sized memory operand.) However, [Listing 4-3](#listing-4-3) is considerably faster because it expends only 4 additional cycles to read the second byte of each word, while [Listing 4-4](#listing-4-4) performs a second `lodsb`{.nasm}, requiring 13 cycles, to read the second byte of each word.
+#### Listing 4-3
+```
+;
+; *** Listing 4-3 ***
+;
+; Measures the performance of reading 1000 words
+; from memory with 1000 word-sized accesses.
+;
+	sub	si,si
+	mov	cx,1000
+	call	ZTimerOn
+    rep	lodsw
+	call	ZTimerOff
+```
+
+For example, consider [Listing 4-3](#listing-4-3), which performs 1000 word-sized reads from memory. This code runs in 3.77 us per word read. That's 45% faster than the 5.49 us per word read of [Listing 4-4](#listing-4-4), which reads the same 1000 words as [Listing 4-3](#listing-4-3) but does so with 2000 byte-sized reads. Both listings perform exactly the same number of memory accesses—2000 accesses, each byte-sized, as all 8088 memory accesses must be. (Remember that the Bus Interface Unit must perform two byte-sized memory accesses in order to handle a word-sized memory operand.) However, [Listing 4-3](#listing-4-3) is considerably faster because it expends only 4 additional cycles to read the second byte of each word, while [Listing 4-4](#listing-4-4) performs a second `lodsb`, requiring 13 cycles, to read the second byte of each word.
+
+#### Listing 4-4
+```
+;
+; *** Listing 4-4 ***
+;
+; Measures the performance of reading 1000 words
+; from memory with 2000 byte-sized accesses.
+;
+	sub	si,si
+	mov	cx,2000
+	call	ZTimerOn
+    rep	lodsb
+	call	ZTimerOff
+```
 
 In short, if you must perform a 16-bit memory access, let the 8088 break the access into two byte-sized accesses for you. The 8088 is more efficient at that task than your code can possibly be.
 
@@ -134,11 +208,11 @@ shr ax,1
 shr ax,1
 ```
 
-should execute in 10 cycles, according to the specifications in Appendix A, since each `shr`{.nasm} takes 2 cycles to execute. Those specifications contain Intel's official instruction execution times, but in this case-and in many others-the specifications are drastically wrong. Why? Because they describe execution time *once an instruction reaches the prefetch queue*. They say nothing about whether a given instruction will be in the prefetch queue when it's time for that instruction to run, or how long it will take that instruction to reach the prefetch queue if it's not there already. Thanks to the low performance of the 8088's external data bus, that's a glaring omission -but, alas, an unavoidable one. Let's look at why the official execution times are wrong, and why that can't be helped.
+should execute in 10 cycles, according to the specifications in Appendix A, since each `shr` takes 2 cycles to execute. Those specifications contain Intel's official instruction execution times, but in this case-and in many others-the specifications are drastically wrong. Why? Because they describe execution time *once an instruction reaches the prefetch queue*. They say nothing about whether a given instruction will be in the prefetch queue when it's time for that instruction to run, or how long it will take that instruction to reach the prefetch queue if it's not there already. Thanks to the low performance of the 8088's external data bus, that's a glaring omission -but, alas, an unavoidable one. Let's look at why the official execution times are wrong, and why that can't be helped.
 
 ### Official Execution Times are Only Part of the Story
 
-The sequence of 5 `shr`{.nasm} instructions in the last example is 10 bytes long. That means that it can never execute in less than 24 cycles even if the 4-byte prefetch queue is full when it starts, since 6 instruction bytes would still remain to be fetched, at 4 cycles per fetch. If the prefetch queue is empty at the start, the sequence *could* take 40 cycles. In short, thanks to instruction fetching the code won't run at its documented speed, and could take up to 4 times as long as it is supposed to.
+The sequence of 5 `shr` instructions in the last example is 10 bytes long. That means that it can never execute in less than 24 cycles even if the 4-byte prefetch queue is full when it starts, since 6 instruction bytes would still remain to be fetched, at 4 cycles per fetch. If the prefetch queue is empty at the start, the sequence *could* take 40 cycles. In short, thanks to instruction fetching the code won't run at its documented speed, and could take up to 4 times as long as it is supposed to.
 
 Why does Intel document Execution Unit execution time rather than overall instruction execution time, which includes both instruction fetch time and Execution Unit execution time? As described in Chapter 3, instruction fetching isn't performed as part of instruction execution by the Execution Unit, but instead is carried on in parallel by the Bus Interface Unit whenever the external data bus isn't in use or whenever the EU runs out of instruction bytes to execute. Sometimes the BIU is able to use spare bus cycles to prefetch instruction bytes before the EU needs them, so instruction fetching takes no time at all, practically speaking. At other times the EU executes instructions faster than the BIU can fetch them and instruction fetching becomes a significant part of overall execution time. As a result, *the effective fetch time for a given instruction varies greatly depending on the code mix preceding that instruction*. Similarly, the state in which a given instruction leaves the prefetch queue affects the overall execution time of the following instructions.
 
@@ -155,19 +229,93 @@ Some slight prefetch queue-induced inaccuracy usually exists even when the Zen t
 
 Another way in which the prefetch queue cycle-eater complicates the use of the Zen timer involves the practice of timing the performance of a few instructions over and over. I'll often repeat one or two instructions 100 or 1000 times in a row in listings in this book in order to get timing intervals that are long enough to provide reliable measurements. However, as we just learned, the actual performance of any 8088 instruction depends on the code mix preceding any given use of that instruction, which in turns affects the state of the prefetch queue when the instruction starts executing. Alas, the execution time of an instruction preceded by dozens of identical instructions reflects just one of many possible prefetch states (and not a very likely state at that), and some of the other prefetch states may well produce distinctly different results.
 
-For example, consider the code in [Listings 4-5](#listing-4-5) and [4-6](#listing-4-6). [Listing 4-5](#listing-4-5) shows our familiar `shr`{.nasm} case. Here, because the prefetch queue is always empty, execution time should work out to about 4 cycles per byte, or 8 cycles per `shr`{.nasm}, as shown in Figure 4.3. (Figure 4.3 illustrates the relationship between instruction fetching and execution in a simplified way, and is not intended to show the exact timings of 8088 operations.) That's quite a contrast to the official 2-cycle execution time of `shr`{.nasm}. In fact, the Zen timer reports that [Listing 4-5](#listing-4-5) executes in 1.81 us per byte, or slightly *more* than 4 cycles per byte. (The extra time is the result of the dynamic RAM refresh cycle-eater, which we'll discuss shortly.) Going strictly by [Listing 4-5](#listing-4-5), we would conclude that the "true" execution time of `shr`{.nasm} is 8.64 cycles.
+#### Listing 4-5
+```
+;
+; *** Listing 4-5 ***
+;
+; Measures the performance of 1000 SHR instructions
+; in a row. Since SHR executes in 2 cycles but is
+; 2 bytes long, the prefetch queue is always empty,
+; and prefetching time determines the overall
+; performance of the code.
+;
+	call	ZTimerOn
+	rept	1000
+	shr	ax,1
+	endm
+	call	ZTimerOff
+```
+For example, consider the code in [Listings 4-5](#listing-4-5) and [4-6](#listing-4-6). [Listing 4-5](#listing-4-5) shows our familiar `shr` case. Here, because the prefetch queue is always empty, execution time should work out to about 4 cycles per byte, or 8 cycles per `shr`, as shown in Figure 4.3. (Figure 4.3 illustrates the relationship between instruction fetching and execution in a simplified way, and is not intended to show the exact timings of 8088 operations.) That's quite a contrast to the official 2-cycle execution time of `shr`. In fact, the Zen timer reports that [Listing 4-5](#listing-4-5) executes in 1.81 us per byte, or slightly *more* than 4 cycles per byte. (The extra time is the result of the dynamic RAM refresh cycle-eater, which we'll discuss shortly.) Going strictly by [Listing 4-5](#listing-4-5), we would conclude that the "true" execution time of `shr` is 8.64 cycles.
 
-![**Figure 4.3**](images/fig4.3RT.png)
+#### Listing 4-6
+```
+;
+; *** Listing 4-6 ***
+;
+; Measures the performance of 1000 MUL/SHR instruction
+; pairs in a row. The lengthy execution time of MUL
+; should keep the prefetch queue from ever emptying.
+;
+	mov	cx,1000
+	sub	ax,ax
+	call	ZTimerOn
+	rept	1000
+	mul	ax
+	shr	ax,1
+	endm
+	call	ZTimerOff
+```
 
-Now let's examine [Listing 4-6](#listing-4-6). Here each `shr`{.nasm} follows a `mul`{.nasm} instruction. Since `mul`{.nasm} instructions take so long to execute that the prefetch queue is always full when they finish, each `shr`{.nasm} should be ready and waiting in the prefetch queue when the preceding `mul`{.nasm} ends. As a result, we'd expect that each `shr`{.nasm} would execute in 2 cycles; together with the 118 cycle execution time of multiplying 0 times 0, the total execution time should come to 120 cycles per `shr`{.nasm}/`mul`{.nasm} pair, as shown in Figure 4.4. And, by God, when we run [Listing 4-6](#listing-4-6) we get an execution time of 25.14 us per `shr`{.nasm}/`mul`{.nasm} pair, or *exactly* 120 cycles! According to these results, the "true" execution time of `shr`{.nasm} would seem to be 2 cycles, quite a change from the conclusion we drew from [Listing 4-5](#listing-4-5).
+[Description](../images/fig4.3RT.png)
 
-![**Figure 4.4** Execution unit time determines the overall execution time of a sequence of slow instructions, such as `mul`{.nasm}, because such a sequence allows the prefetch queue to stay well stocked with instruction bytes in this example. Overall execution time exactly matches execution unit execution time, and the prefetch queue cycle eater has no effect. This figure is for illustrative purposes only, and is not intended to show the exect timings of 8088 operations.](images/fig4.4RT.png)
+**Figure 4.3**
 
-The key point is this: we've seen one code sequence in which `shr`{.nasm} took 8-plus cycles to execute, and another in which it took only 2 cycles. Are we talking about two different forms of `shr`{.nasm} here? Of course not—the difference is purely a reflection of the differing states in which the preceding code left the prefetch queue. In [Listing 4-5](#listing-4-5), each `shr`{.nasm} after the first few follows a slew of other `shr`{.nasm} instructions which have sucked the prefetch queue dry, so overall performance reflects instruction fetch time. By contrast, each `shr`{.nasm} in [Listing 4-6](#listing-4-6) follows a `mul`{.nasm} instruction which leaves the prefetch queue full, so overall performance reflects Execution Unit execution time.
+Now let's examine [Listing 4-6](#listing-4-6). Here each `shr` follows a `mul` instruction. Since `mul` instructions take so long to execute that the prefetch queue is always full when they finish, each `shr` should be ready and waiting in the prefetch queue when the preceding `mul` ends. As a result, we'd expect that each `shr` would execute in 2 cycles; together with the 118 cycle execution time of multiplying 0 times 0, the total execution time should come to 120 cycles per `shr`/`mul` pair, as shown in Figure 4.4. And, by God, when we run [Listing 4-6](#listing-4-6) we get an execution time of 25.14 us per `shr`/`mul` pair, or *exactly* 120 cycles! According to these results, the "true" execution time of `shr` would seem to be 2 cycles, quite a change from the conclusion we drew from [Listing 4-5](#listing-4-5).
+
+[Description](../images/fig4.4RT.png)
+
+**Figure 4.4** Execution unit time determines the overall execution time of a sequence of slow instructions, such as `mul`, because such a sequence allows the prefetch queue to stay well stocked with instruction bytes in this example. Overall execution time exactly matches execution unit execution time, and the prefetch queue cycle eater has no effect. This figure is for illustrative purposes only, and is not intended to show the exect timings of 8088 operations.
+
+The key point is this: we've seen one code sequence in which `shr` took 8-plus cycles to execute, and another in which it took only 2 cycles. Are we talking about two different forms of `shr` here? Of course not—the difference is purely a reflection of the differing states in which the preceding code left the prefetch queue. In [Listing 4-5](#listing-4-5), each `shr` after the first few follows a slew of other `shr` instructions which have sucked the prefetch queue dry, so overall performance reflects instruction fetch time. By contrast, each `shr` in [Listing 4-6](#listing-4-6) follows a `mul` instruction which leaves the prefetch queue full, so overall performance reflects Execution Unit execution time.
 
 Clearly, either instruction fetch time *or* Execution Unit execution time—or even a mix of the two, if an instruction is partially prefetched—can determine code performance. Some people operate under a rule of thumb by which they assume that the execution time of each instruction is 4 cycles times the number of bytes in the instruction. While that's often true for register-only code, it frequently doesn't hold for code that accesses memory. For one thing, the rule should be 4 cycles times the number of *memory accesses*, not instruction bytes, since all accesses take 4 cycles. For another, memory-accessing instructions often have slower Execution Unit execution times than the 4 cycles per memory access rule would dictate, because the 8088 isn't very fast at calculating memory addresses, as we'll see in Chapter 7. Also, the 4 cycles per instruction byte rule isn't true for register-only instructions that are already in the prefetch queue when the preceding instruction ends.
 
-The truth is that it never hurts performance to reduce either the cycle count or the byte count of a given bit of code, but there's no guarantee that one or the other will improve performance either. For example, consider [Listing 4-7](#listing-4-7), which consists of a series of 4-cycle, 2-byte `mov al,0`{.nasm} instructions, and which executes at the rate of 1.81 us per instruction. Now consider [Listing 4-8](#listing-4-8), which replaces the 4-cycle `mov al,0`{.nasm} with the 3-cycle (but still 2-byte) `sub al,al`{.nasm}. Despite its 1-cycle-per-instruction advantage, [Listing 4-8](#listing-4-8) runs at exactly the same speed as [Listing 4-7](#listing-4-7). The reason: both instructions are 2 bytes long, and in both cases it is the 8-cycle instruction fetch time, not the 3-or 4-cycle Execution Unit execution time, that limits performance.
+#### Listing 4-7
+```
+;
+; *** Listing 4-7 ***
+;
+; Measures the performance of repeated MOV AL,0 instructions,
+; which take 4 cycles each according to Intel's official
+; specifications.
+;
+	sub	ax,ax
+	call	ZTimerOn
+	rept	1000
+	mov	al,0
+	endm
+	call	ZTimerOff
+```
+
+The truth is that it never hurts performance to reduce either the cycle count or the byte count of a given bit of code, but there's no guarantee that one or the other will improve performance either. For example, consider [Listing 4-7](#listing-4-7), which consists of a series of 4-cycle, 2-byte `mov al,0` instructions, and which executes at the rate of 1.81 us per instruction. Now consider [Listing 4-8](#listing-4-8), which replaces the 4-cycle `mov al,0` with the 3-cycle (but still 2-byte) `sub al,al`. Despite its 1-cycle-per-instruction advantage, [Listing 4-8](#listing-4-8) runs at exactly the same speed as [Listing 4-7](#listing-4-7). The reason: both instructions are 2 bytes long, and in both cases it is the 8-cycle instruction fetch time, not the 3-or 4-cycle Execution Unit execution time, that limits performance.
+
+#### Listing 4-8
+```
+;
+; *** Listing 4-8 ***
+;
+; Measures the performance of repeated SUB AL,AL instructions,
+; which take 3 cycles each according to Intel's official
+; specifications.
+;
+	sub	ax,ax
+	call	ZTimerOn
+	rept	1000
+	sub	al,al
+	endm
+	call	ZTimerOff
+```
 
 As you can see, it's easy to be drawn into thinking you're saving cycles when you're not. You can only improve the performance of a specific bit of code by reducing the factor - either instruction fetch time or execution time, or sometimes a mix of the two—that's limiting the performance of that code.
 
@@ -179,9 +327,9 @@ What we *really* want is to know how long useful working code takes to run, not 
 
 ### Approximating Overall Execution Times
 
-Don't think that because overall instruction execution time is determined by both instruction fetch time and Execution Unit execution time, the two times should be added together when estimating performance. For example, practically speaking, each `shr`{.nasm} in [Listing 4-5](#listing-4-5) does not take 8 cycles of instruction fetch time plus 2 cycles of Execution Unit execution time to execute. Figure 4.3 shows that while a given `shr`{.nasm} is executing, the fetch of the next `shr`{.nasm}is starting, and since the two operations are overlapped for 2 cycles, there's no sense in charging the time to both instructions. You could think of the extra instruction fetch time for `shr`{.nasm} in [Listing 4-5](#listing-4-5) as being 6 cycles, which yields an overall execution time of 8 cycles when added to the 2 cycles of Execution Unit execution time.
+Don't think that because overall instruction execution time is determined by both instruction fetch time and Execution Unit execution time, the two times should be added together when estimating performance. For example, practically speaking, each `shr` in [Listing 4-5](#listing-4-5) does not take 8 cycles of instruction fetch time plus 2 cycles of Execution Unit execution time to execute. Figure 4.3 shows that while a given `shr` is executing, the fetch of the next `shr`is starting, and since the two operations are overlapped for 2 cycles, there's no sense in charging the time to both instructions. You could think of the extra instruction fetch time for `shr` in [Listing 4-5](#listing-4-5) as being 6 cycles, which yields an overall execution time of 8 cycles when added to the 2 cycles of Execution Unit execution time.
 
-Alternatively, you could think of each `shr`{.nasm} in [Listing 4-5](#listing-4-5) as taking 8 cycles to fetch, and then executing in effectively 0 cycles while the next `shr`{.nasm} is being fetched. Whichever perspective you prefer is fine. The important point is that the time during which the execution of one instruction and the fetching of the next instruction overlap should only be counted toward the overall execution time of one of the instructions. For all intents and purposes, one of the two instructions runs at no performance cost whatsoever while the overlap exists.
+Alternatively, you could think of each `shr` in [Listing 4-5](#listing-4-5) as taking 8 cycles to fetch, and then executing in effectively 0 cycles while the next `shr` is being fetched. Whichever perspective you prefer is fine. The important point is that the time during which the execution of one instruction and the fetching of the next instruction overlap should only be counted toward the overall execution time of one of the instructions. For all intents and purposes, one of the two instructions runs at no performance cost whatsoever while the overlap exists.
 
 As a working definition, we'll consider the execution time of a given instruction in a particular context to start when the first byte of the instruction is sent to the Execution Unit and end when the first byte of the next instruction is sent to the EU. We'll discuss this further in Chapter 5.
 
@@ -189,7 +337,7 @@ As a working definition, we'll consider the execution time of a given instructio
 
 Reducing the impact of the prefetch queue cycle-eater is one of the overriding principles of high-performance assembler code. How can you do this? One effective technique is to minimize access to memory operands, since such accesses compete with instruction fetching for precious memory accesses. You can also greatly reduce instruction fetch time simply by your choice of instructions: *keep your instructions short*. Less time is required to fetch instructions that are 1 or 2 bytes long than instructions that are 5 or 6 bytes long. Reduced instruction fetching lowers minimum execution time (minimum execution time is 4 cycles times the number of instruction bytes) and often leads to faster overall execution.
 
-While short instructions minimize overall prefetch time, they ironically actually often suffer relatively more from the prefetch queue bottleneck than do long instructions. Short instructions generally have such fast execution times that they drain the prefetch queue despite their small size. For example, consider the `shr`{.nasm} of [Listing 4-5](#listing-4-5), which runs at only 25% of its Execution Unit execution time even though it's only 2 bytes long, thanks to the prefetch queue bottleneck. Short instructions are nonetheless generally faster than long instructions, thanks to the combination of fewer instruction bytes and faster Execution Unit execution times, and should be used as much as possible—just don't expect them to run at their documented speeds.
+While short instructions minimize overall prefetch time, they ironically actually often suffer relatively more from the prefetch queue bottleneck than do long instructions. Short instructions generally have such fast execution times that they drain the prefetch queue despite their small size. For example, consider the `shr` of [Listing 4-5](#listing-4-5), which runs at only 25% of its Execution Unit execution time even though it's only 2 bytes long, thanks to the prefetch queue bottleneck. Short instructions are nonetheless generally faster than long instructions, thanks to the combination of fewer instruction bytes and faster Execution Unit execution times, and should be used as much as possible—just don't expect them to run at their documented speeds.
 
 More than anything, the above rules mean using the registers as heavily as possible, both because register-only instructions are short and because they don't perform memory accesses to read or write operands. (Using the registers is a topic we'll return to repeatedly in *The Zen of Assembly Language*.) However, using the registers is a rule of thumb, not a commandment. In some circumstances, it may actually be *faster* to access memory. (The look-up table technique, which we'll encounter in Chapter 7, is one such case.) What's more, the performance of the prefetch queue (and hence the performance of each instruction) differs from one code sequence to the next, and can even differ during different executions of the same code sequence.
 
@@ -229,19 +377,55 @@ just about the desired 4 ms time I mentioned earlier. (Only the first 640 Kb of 
 
 Don't sweat the details here. The important point is this: for at least 4 out of every 72 cycles, the PC's bus is given over to DRAM refresh and is not available to the 8088, as shown in Figure 4.5. That means that as much as 5.56% of the PC's already inadequate bus capacity is lost. However, DRAM refresh doesn't necessarily stop the 8088 for 4 cycles. The Execution Unit of the 8088 can keep processing while DRAM refresh is occurring, unless the EU needs to access memory. Consequently, DRAM refresh can slow code performance anywhere from 0% to 5.56% (and actually a bit more, as we'll see shortly), depending on the extent to which DRAM refresh occupies cycles during which the 8088 would otherwise be accessing memory.
 
-![**Figure 4.5** The PC's bus is given over to providing dynamic RAM (DRAM) refresh for at least 4 cycles out of every 72 cycles.](images/fig4.5RT.png)
+[Description](../images/fig4.5RT.png)
+
+**Figure 4.5** The PC's bus is given over to providing dynamic RAM (DRAM) refresh for at least 4 cycles out of every 72 cycles.
 
 ### The Impact of Dram Refresh
 
-Let's look at examples from opposite ends of the spectrum in terms of the impact of DRAM refresh on code performance. First, consider the series of `mul`{.nasm} instructions in [Listing 4-9](#listing-4-9). Since a 16-bit `mul`{.nasm} executes in between 118 and 133 cycles and is only 2 bytes long, there should be plenty of time for the prefetch queue to fill after each instruction, even after DRAM refresh has taken its slice of memory access time. Consequently, the prefetch queue should be able to keep the Execution Unit well-supplied with instruction bytes at all times. Since [Listing 4-9](#listing-4-9) uses no memory operands, the Execution Unit should never have to wait for data from memory, and DRAM refresh should have no impact on performance. (Remember that the Execution Unit can operate normally during DRAM refreshes so long as it doesn't need to request a memory access from the Bus Interface Unit.)
+#### Listing 4-9
+```
+;
+; *** Listing 4-9 ***
+;
+; Measures the performance of repeated MUL instructions,
+; which allow the prefetch queue to be full at all times,
+; to demonstrate a case in which DRAM refresh has no impact
+; on code performance.
+;
+	sub	ax,ax
+	call	ZTimerOn
+	rept	1000
+	mul	ax
+	endm
+	call	ZTimerOff
+```
 
-Running [Listing 4-9](#listing-4-9), we find that each `mul`{.nasm} executes in 24.72 us, or exactly 118 cycles. Since that's the shortest time in which `mul`{.nasm} can execute, we can see that no performance is lost to DRAM refresh. [Listing 4-9](#listing-4-9) clearly illustrates that DRAM refresh only affects code performance when a DRAM refresh forces the Execution Unit of the 8088 to wait for a memory access.
+Let's look at examples from opposite ends of the spectrum in terms of the impact of DRAM refresh on code performance. First, consider the series of `mul` instructions in [Listing 4-9](#listing-4-9). Since a 16-bit `mul` executes in between 118 and 133 cycles and is only 2 bytes long, there should be plenty of time for the prefetch queue to fill after each instruction, even after DRAM refresh has taken its slice of memory access time. Consequently, the prefetch queue should be able to keep the Execution Unit well-supplied with instruction bytes at all times. Since [Listing 4-9](#listing-4-9) uses no memory operands, the Execution Unit should never have to wait for data from memory, and DRAM refresh should have no impact on performance. (Remember that the Execution Unit can operate normally during DRAM refreshes so long as it doesn't need to request a memory access from the Bus Interface Unit.)
 
-Now let's look at the series of `shr`{.nasm} instructions shown in [Listing 4-10](#listing-4-10). Since `shr`{.nasm} executes in 2 cycles but is 2 bytes long, the prefetch queue should be empty while [Listing 4-10](#listing-4-10) executes, with the 8088 prefetching instruction bytes non-stop. As a result, the time per instruction of [Listing 4-10](#listing-4-10) should precisely reflect the time required to fetch the instruction bytes.
+Running [Listing 4-9](#listing-4-9), we find that each `mul` executes in 24.72 us, or exactly 118 cycles. Since that's the shortest time in which `mul` can execute, we can see that no performance is lost to DRAM refresh. [Listing 4-9](#listing-4-9) clearly illustrates that DRAM refresh only affects code performance when a DRAM refresh forces the Execution Unit of the 8088 to wait for a memory access.
 
-Since 4 cycles are required to read each instruction byte, we'd expect each `shr`{.nasm} to execute in 8 cycles, or 1.676 us, if there were no DRAM refresh. In fact, each `shr`{.nasm} in [Listing 4-10](#listing-4-10) executes in 1.81 us, indicating that DRAM refresh is taking 7.4% of the program's execution time. That's nearly 2% more than our worst-case estimate of the loss to DRAM refresh overhead! In fact, the result indicates that DRAM refresh is stealing not 4 but 5.33 cycles out of every 72 cycles. How can this be?
+#### Listing 4-10
+```
+;
+; *** Listing 4-10 ***
+;
+; Measures the performance of repeated SHR instructions,
+; which empty the prefetch queue, to demonstrate the
+; worst-case impact of DRAM refresh on code performance.
+;
+	call	ZTimerOn
+	rept	1000
+	shr	ax,1
+	endm
+	call	ZTimerOff
+```
 
-The answer is that a given DRAM refresh can actually hold up CPU memory accesses for as many as 6 cycles, depending on the timing of the DRAM refresh's DMA request relative to the 8088's internal instruction execution state. When the code in [Listing 4-10](#listing-4-10) runs, each DRAM refresh holds up the CPU for either 5 or 6 cycles, depending on where the 8088 is in executing the current `shr`{.nasm} instruction when the refresh request occurs. Now we see that things can get even worse than we thought: *DRAM refresh can steal as much as 8.33% of available memory access time*—*6 out of every 72 cycles*—*from the 8088*.
+Now let's look at the series of `shr` instructions shown in [Listing 4-10](#listing-4-10). Since `shr` executes in 2 cycles but is 2 bytes long, the prefetch queue should be empty while [Listing 4-10](#listing-4-10) executes, with the 8088 prefetching instruction bytes non-stop. As a result, the time per instruction of [Listing 4-10](#listing-4-10) should precisely reflect the time required to fetch the instruction bytes.
+
+Since 4 cycles are required to read each instruction byte, we'd expect each `shr` to execute in 8 cycles, or 1.676 us, if there were no DRAM refresh. In fact, each `shr` in [Listing 4-10](#listing-4-10) executes in 1.81 us, indicating that DRAM refresh is taking 7.4% of the program's execution time. That's nearly 2% more than our worst-case estimate of the loss to DRAM refresh overhead! In fact, the result indicates that DRAM refresh is stealing not 4 but 5.33 cycles out of every 72 cycles. How can this be?
+
+The answer is that a given DRAM refresh can actually hold up CPU memory accesses for as many as 6 cycles, depending on the timing of the DRAM refresh's DMA request relative to the 8088's internal instruction execution state. When the code in [Listing 4-10](#listing-4-10) runs, each DRAM refresh holds up the CPU for either 5 or 6 cycles, depending on where the 8088 is in executing the current `shr` instruction when the refresh request occurs. Now we see that things can get even worse than we thought: *DRAM refresh can steal as much as 8.33% of available memory access time*—*6 out of every 72 cycles*—*from the 8088*.
 
 Which of the two cases we've examined reflects reality? While either *can* happen, the latter case—significant performance reduction, ranging as high as 8.33%—is far more likely to occur. This is especially true for high-performance assembler code, which uses fast instructions that tend to cause non-stop instruction fetching.
 
@@ -263,7 +447,9 @@ Wait states are cycles during which a bus access by the 8088 to a device on the 
 
 Wait states exist because the 8088 must to be able to coexist with any adapter, no matter how slow (within reason). The 8088 expects to be able to complete each bus access—a memory or I/O read or write—in 4 cycles, but adapters can't always respond that quickly, for a number of reasons. For example, display adapters must split access to display memory between the 8088 and the circuitry that generates the video signal based on the contents of display memory, so they often can't immediately fulfill a request by the 8088 for a display memory read or write. To resolve this conflict, display adapters can tell the 8088 to wait during bus accesses by inserting one or more wait states, as shown in Figure 4.6. The 8088 simply sits and idles as long as wait states are inserted, then completes the access as soon as the display adapter indicates its readiness by no longer inserting wait states. The same would be true of any adapter that couldn't keep up with the 8088.
 
-![**Figure 4.6** Both the video circuitry and the 8088 often try to access display memory at the same time. Display adapters resolve such conflicts by holding up 8088 accesses with wait states until the video circuitry no longer needs to access display memory. This figure is for illustrative purposes only, and is not intended to show the exact timings of 8088 operations.](images/fig4.6RT.png)
+[Description](../images/fig4.6RT.png)
+
+**Figure 4.6** Both the video circuitry and the 8088 often try to access display memory at the same time. Display adapters resolve such conflicts by holding up 8088 accesses with wait states until the video circuitry no longer needs to access display memory. This figure is for illustrative purposes only, and is not intended to show the exact timings of 8088 operations.
 
 Mind you, this is all transparent to the code running on the 8088. An instruction that encounters wait states runs exactly as if there were no wait states, but slower. Wait states are nothing more or less than wasted time as far as the 8088 and your program are concerned.
 
@@ -285,11 +471,15 @@ It matters a great deal which master is more important, for while both the 8088 
 
 It turns out that the 8088 has to do a lot of waiting, for three reasons. First, the video circuitry can take as much as about 90% of the available display memory access time, as shown in Figure 4.7, leaving as little as about 10% of all display memory accesses for the 8088. (These percentages vary considerably among the many EGA and VGA clones.)
 
-![**Figure 4.7** The video circuitry, which scans display memory for pixel data, can take as much as 90 percent of available display memory access time, leaving as little as about 10 percent of all display memory access free for the use of the 8088.](images/fig4.7RT.png)
+[Description](../images/fig4.7RT.png)
+
+**Figure 4.7** The video circuitry, which scans display memory for pixel data, can take as much as 90 percent of available display memory access time, leaving as little as about 10 percent of all display memory access free for the use of the 8088.
 
 Second, because dots (or *pixels*, short for "picture elements") must be drawn on the screen at a constant speed, display adapters can provide memory accesses only at fixed intervals. As a result, time can be lost while the 8088 synchronizes with the start of the next display adapter memory access, even if the video circuitry isn't accessing display memory at that time, as shown in Figure 4.8.
 
-![**Figure 4.8** Accesses to display memory are available only at fixed intervals and are of fixed lengths. Both the intervals and the lengths are controlled by the display adapter, and are the same regardless of the speed of the computer in which the display adapter is installed. This figure is for illustrative purposes only, and is not intended to show the exact timings of 8088 operations.](images/fig4.8RT.png)
+[Description](../images/fig4.8RT.png)
+
+**Figure 4.8** Accesses to display memory are available only at fixed intervals and are of fixed lengths. Both the intervals and the lengths are controlled by the display adapter, and are the same regardless of the speed of the computer in which the display adapter is installed. This figure is for illustrative purposes only, and is not intended to show the exact timings of 8088 operations.
 
 Finally, the time it takes a display adapter to complete a memory access is related to the speed of the clock which generates pixels on the screen rather than to the memory access speed of the 8088. Consequently, the time taken for display memory to complete an 8088 read or write access is often longer than the time taken for system memory to complete an access, even if the 8088 lucks into hitting a free display memory access just as it becomes available, again as shown in Figure 4.8. Any or all of the three factors I've described can result in wait states, slowing the 8088 and creating the display adapter cycle-eater.
 
@@ -319,11 +509,71 @@ For example, if we assume the same 5 us per display memory access for the EGA's 
 
 to scroll the screen once in the EGA's hi-res graphics mode, mode 10h. That's more than one-quarter of a second—noticeable by human standards, an eternity by computer standards.
 
-That sounds pretty serious, but we did make an unfounded assumption about memory access speed. Let's get some hard numbers. [Listing 4-11](#listing-4-11) accesses display memory at the 8088's maximum speed, by way of a `rep movsw`{.nasm} with display memory as both source and destination. The code in [Listing 4-11](#listing-4-11) executes in 3.18 us per access to display memory—not as long as we had assumed, but a long time nonetheless.
+#### Listing 4-11
+```
+;
+; *** Listing 4-11 ***
+;
+; Times speed of memory access to Enhanced Graphics
+; Adapter graphics mode display memory at A000:0000.
+;
+	mov	ax,0010h
+	int	10h		;select hi-res EGA graphics
+				; mode 10 hex (AH=0 selects
+				; BIOS set mode function,
+				; with AL=mode to select)
+;
+	mov	ax,0a000h
+	mov	ds,ax
+	mov	es,ax		;move to & from same segment
+	sub	si,si		;move to & from same offset
+	mov	di,si
+	mov	cx,800h		;move 2K words
+	cld
+	call	ZTimerOn
+	rep	movsw		;simply read each of the first
+				; 2K words of the destination segment,
+				; writing each byte immediately back
+				; to the same address. No memory
+				; locations are actually altered; this
+				; is just to measure memory access
+				; times
+	call	ZTimerOff
+;
+	mov	ax,0003h
+	int	10h		;return to text mode
+```
 
-For comparison, let's see how long the same code takes when accessing normal system RAM instead of display memory. The code in [Listing 4-12](#listing-4-12), which performs a `rep movsw`{.nasm} from the code segment to the code segment, executes in 1.39 us per display memory access. That means that on average 1.79 us (more than 8 cycles!) are lost to the display adapter cycle-eater on each access. In other words, the display adapter cycle-eater can *more than double* the execution time of 8088 code!
+That sounds pretty serious, but we did make an unfounded assumption about memory access speed. Let's get some hard numbers. [Listing 4-11](#listing-4-11) accesses display memory at the 8088's maximum speed, by way of a `rep movsw` with display memory as both source and destination. The code in [Listing 4-11](#listing-4-11) executes in 3.18 us per access to display memory—not as long as we had assumed, but a long time nonetheless.
 
-Bear in mind that we're talking about a worst case here; the impact of the display adapter cycle-eater is proportional to the percent of time a given code sequence spends accessing display memory. A line-drawing subroutine, which executes perhaps a dozen instructions for each display memory access, generally loses less performance to the display adapter cycle-eater than does a block-copy or scrolling subroutine that uses `rep movs`{.nasm} instructions. Scaled and three-dimensional graphics, which spend a great deal of time performing calculations (often using *very* slow floating-point arithmetic), tend to suffer still less.
+For comparison, let's see how long the same code takes when accessing normal system RAM instead of display memory. The code in [Listing 4-12](#listing-4-12), which performs a `rep movsw` from the code segment to the code segment, executes in 1.39 us per display memory access. That means that on average 1.79 us (more than 8 cycles!) are lost to the display adapter cycle-eater on each access. In other words, the display adapter cycle-eater can *more than double* the execution time of 8088 code!
+
+#### Listing 4-12
+```
+;
+; *** Listing 4-12 ***
+;
+; Times speed of memory access to normal system
+; memory.
+;
+	mov	ax,ds
+	mov	es,ax		;move to & from same segment
+	sub	si,si		;move to & from same offset
+	mov	di,si
+	mov	cx,800h		;move 2K words
+	cld
+	call	ZTimerOn
+	rep	movsw		;simply read each of the first
+				; 2K words of the destination segment,
+				; writing each byte immediately back
+				; to the same address. No memory
+				; locations are actually altered; this
+				; is just to measure memory access
+				; times
+	call	ZTimerOff
+```
+
+Bear in mind that we're talking about a worst case here; the impact of the display adapter cycle-eater is proportional to the percent of time a given code sequence spends accessing display memory. A line-drawing subroutine, which executes perhaps a dozen instructions for each display memory access, generally loses less performance to the display adapter cycle-eater than does a block-copy or scrolling subroutine that uses `rep movs` instructions. Scaled and three-dimensional graphics, which spend a great deal of time performing calculations (often using *very* slow floating-point arithmetic), tend to suffer still less.
 
 In addition, code that accesses display memory infrequently tends to suffer only about half of the maximum display memory wait states, because on average such code will access display memory halfway between one available display memory access slot and the next. As a result, code that accesses display memory less intensively than the code in [Listing 4-11](#listing-4-11) will on average lose 4 or 5 rather than 8-plus cycles to the display adapter cycle-eater on each memory access.
 
