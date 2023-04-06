@@ -18,6 +18,58 @@ In this case, as in many others, the objective—a fast cumulative exclusive-or�
 
 Why? Consider the solution shown in [Listing 13-1](#listing-13-1). [Listing 13-1](#listing-13-1) is obviously well-matched to the task of generating the cumulative exclusive-or for a block of 64 bytes. In fact, it's so well-matched that few programmers would even contemplate alternatives. The code in [Listing 13-1](#listing-13-1) works, it's easy to write, and it runs in just 503 us. Surely that's just about as fast as the 8088 can manage to perform this task—after all, the loop involves just three instructions: one `lodsb` (string instructions are the fastest around), one register-register `xor` (register-register instructions are short and fast), and one `loop` (the 8088's special, fast looping instruction). Who would ever think that performance could be nearly doubled by literally duplicating the code inside the loop 64 times and executing that code sequentially—thereby eliminating branching *entirely*?
 
+#### Listing 13-1
+```nasm
+;
+; *** Listing 13-1 ***
+;
+; Generates the cumulative exclusive-or of all bytes in a
+; 64-byte block of memory by using the LOOP instruction to
+; repeat the same code 64 times.
+;
+	jmp	Skip
+;
+; The 64-byte block for which to generate the cumulative
+; exclusive-or.
+;
+X=1
+ByteArray	label	byte
+	rept	64
+	db	X
+X=X+1
+	endm
+;
+; Generates the cumulative exclusive-or of all bytes in a
+; 64-byte memory block.
+;
+; Input:
+;	SI = pointer to start of 64-byte block for which to
+;		calculate cumulative exclusive-or
+;
+; Output:
+;	AH = cumulative exclusive-or of all bytes in the
+;		64-byte block
+;
+; Registers altered: AX, CX, SI
+;
+CumulativeXor:
+	cld
+	sub	ah,ah	;initialize our cumulative XOR to 0
+	mov	cx,64	;number of bytes to XOR together
+XorLoop:
+	lodsb		;get the next byte and
+	xor	ah,al	; XOR it into the cumulative result
+	loop	XorLoop
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	si,offset ByteArray
+				;point to the 64-byte block
+	call	CumulativeXor	;get the cumulative XOR
+	call	ZTimerOff
+```
+
 Only a Zen programmer would even consider the possibility, for not-branching simply has no counterpart in non-Zen programming. Not-branching just plain feels *wrong* at first to any programmer raised on high-level languages. Not-branching goes against the grain and intent of both the 8088 instruction set and virtually all computer-science teachings and high-level languages. That's only to be expected; language designers and computer-science teachers are concerned with the form of programs, for they're most interested in making programming more amenable to people—that is, matching implementations to the way people think.
 
 By contrast, Zen programmers are concerned with the functionality of programs. Zen programmers focus on performance and/or program size, and are most interested in matching implementations to the way *computers* think. The desired application is paramount, but the true Zen comes in producing the necessary result (the functionality) in the best possible way given the computer's resources.
@@ -25,6 +77,58 @@ By contrast, Zen programmers are concerned with the functionality of programs. Z
 Zen programmers understand that the objective in generating the cumulative exclusive-or of 64 bytes actually has nothing whatsoever to do with looping. The objective is simply to exclusive-or together the 64 bytes in whatever way the PC can most rapidly accomplish the task, and looping is just one of many possible means to that end. Most programmers have seen and solved similar problems so many times, however, that they instinctively—almost unconsciously—select the `loop` instruction from their bag of tricks the moment they see the problem. To these programmers, repetitive processing and `loop` are synonymous.
 
 Zen programmers have a bigger bag of tricks, however, and a more flexible view of the world. [Listing 13-2](#listing-13-2) shows a Zen solution to the array-sum problem. [Listing 13-2](#listing-13-2) performs no branches at all, thanks to the use of in-line code, which we'll discuss in detail later in this chapter.
+
+#### Listing 13-2
+```nasm
+;
+; *** Listing 13-2 ***
+;
+; Generates the cumulative exclusive-or of all bytes in a
+; 64-byte block of memory by replicating the exclusive-or
+; code 64 times and then executing all 64 instances in a
+; row without branching.
+;
+	jmp	Skip
+;
+; The 64-byte block for which to generate the cumulative
+; exclusive-or.
+;
+X=1
+ByteArray	label	byte
+	rept	64
+	db	X
+X=X+1
+	endm
+;
+; Generates the cumulative exclusive-or of all bytes in a
+; 64-byte memory block.
+;
+; Input:
+;	SI = pointer to start of 64-byte block for which to
+;		calculate cumulative exclusive-or
+;
+; Output:
+;	AH = cumulative exclusive-or of all bytes in the
+;		64-byte block
+;
+; Registers altered: AX, SI
+;
+CumulativeXor:
+	sub	ah,ah	;initialize our cumulative XOR to 0
+	rept	64
+	lodsb		;get the next byte and
+	xor	ah,al	; XOR it into the cumulative result
+	endm
+	ret
+;
+Skip:
+	call	ZTimerOn
+	cld
+	mov	si,offset ByteArray
+				;point to the 64-byte block
+	call	CumulativeXor	;get the cumulative XOR
+	call	ZTimerOff
+```
 
 Functionally, there's not much difference between [Listings 13-1](#listing-13-1) and [13-2](#listing-13-2). Both listings leave the same cumulative result in AH, leave the same value in SI, and even leave the flags set to the same values. [Listing 13-1](#listing-13-1) leaves CX set to zero, while [Listing 13-2](#listing-13-2) doesn't touch CX, but that's really a point in the favor of [Listing 13-2](#listing-13-2), and could in any case be remedied simply by placing a `sub cx,cx` at the start of [Listing 13-2](#listing-13-2) if necessary.
 
@@ -58,7 +162,7 @@ Nonetheless, repeated shifts and rotates still aren't *fast*—instead, you migh
 
 ## Look-Up Tables: Calculating Without Branching
 
-Like the use of repeated string instructions, the use of look-up tables is a familiar technique that can help avoid branching. Whenever you're using branching code to perform a calculation, see if you can't use a look-up table instead; tight as your branching code may be, look-up tables are usually faster still. [Listings 11-26](#listing-11-26) and [11-27](#listing-11-27) pit a five-instruction sequence that branches no more than once against an equivalent table look-up; you can't get branching code that's much tighter than that, and yet the table look-up is much faster.
+Like the use of repeated string instructions, the use of look-up tables is a familiar technique that can help avoid branching. Whenever you're using branching code to perform a calculation, see if you can't use a look-up table instead; tight as your branching code may be, look-up tables are usually faster still. [Listings 11-26](chapter-11.md#listing-11-26) and [11-27](chapter-11.md#listing-11-27) pit a five-instruction sequence that branches no more than once against an equivalent table look-up; you can't get branching code that's much tighter than that, and yet the table look-up is much faster.
 
 In short, if you have a calculation to make—even a simple one—see if it isn't faster to precalculate the answer at assembly time and just look it up at run time.
 
@@ -72,19 +176,75 @@ Let's look at the statistics. It always takes a conditional jump at least 16 cyc
 
 In other words, falling through a conditional jump can be anywhere from 100% to 700% faster than branching, depending on the exact state and behavior of the prefetch queue. As you might imagine, it's worth going out of your way to reap cycle savings of that magnitude... and that's why you should arrange your conditional jumps so that they fall through as often as possible.
 
-For example, you'll recall that in Chapter 11—in [Listing 11-20](#listing-11-20), to be precise—we tested several characters for inclusion in a small set via repeated `cmp`/`jz` instruction pairs. We arranged the conditional jumps so that a jump occurred only when a match was made, meaning that at most one branch was performed during any given inclusion test. Put another way, we branched out of the main stream of the subroutine on the less common condition.
+For example, you'll recall that in Chapter 11—in [Listing 11-20](chapter-11.md#listing-11-20), to be precise—we tested several characters for inclusion in a small set via repeated `cmp`/`jz` instruction pairs. We arranged the conditional jumps so that a jump occurred only when a match was made, meaning that at most one branch was performed during any given inclusion test. Put another way, we branched out of the main stream of the subroutine on the less common condition.
 
-You may not have thought much of it at the time, but the arrangement of branches in [Listing 11-20](#listing-11-20) was no accident. Tests for four potential matches are involved when testing for inclusion in a set of four characters, and no more than one of those matches can occur during any given test. Given an even distribution of match characters, matching is clearly less common than not matching. If we jumped whenever we *didn't* get a match (the more common condition), we'd end up branching as many as three times during a single test, with significantly worse performance the likely result.
+You may not have thought much of it at the time, but the arrangement of branches in [Listing 11-20](chapter-11.md#listing-11-20) was no accident. Tests for four potential matches are involved when testing for inclusion in a set of four characters, and no more than one of those matches can occur during any given test. Given an even distribution of match characters, matching is clearly less common than not matching. If we jumped whenever we *didn't* get a match (the more common condition), we'd end up branching as many as three times during a single test, with significantly worse performance the likely result.
 
-[Listing 13-3](#listing-13-3) shows [Listing 11-20](#listing-11-20) modified to branch on non-matches rather than matches. The original branch-on-match version ran in 119 us, and, as predicted, that's faster than [Listing 13-3](#listing-13-3), which runs in 133 us. That's not the two-or three-times performance improvement we've grown accustomed to seeing (my, how jaded we've become!), but it's significant nonetheless, especially since we're talking about a very small number of conditional jumps. We'd see a more dramatic difference if we were dealing with a long series of tests.
+[Listing 13-3](#listing-13-3) shows [Listing 11-20](chapter-11.md#listing-11-20) modified to branch on non-matches rather than matches. The original branch-on-match version ran in 119 us, and, as predicted, that's faster than [Listing 13-3](#listing-13-3), which runs in 133 us. That's not the two-or three-times performance improvement we've grown accustomed to seeing (my, how jaded we've become!), but it's significant nonetheless, especially since we're talking about a very small number of conditional jumps. We'd see a more dramatic difference if we were dealing with a long series of tests.
 
-Another relevant point is that the *worst-case* performance of [Listing 13-3](#listing-13-3) is much worse than that of Listing 11-20. [Listing 13-3](#listing-13-3) actually has a shorter best-case time than [Listing 11-20](#listing-11-20), because no branches at all are performed when the test character is 'A'. On the other hand, [Listing 13-3](#listing-13-3) performs three branches when the test character is '!' or is not in the set, and that's two branches more than [Listing 11-20](#listing-11-20) ever performs. When you're trying to make sure that code always responds within a certain time, worst-case performance can matter more than average performance.
+#### Listing 13-3
+```nasm
+;
+; *** Listing 13-3 ***
+;
+; Tests whether several characters are in the set
+; {A,Z,3,!} by using the compare-and-jump approach,
+; branching each time a match isn't found.
+;
+	jmp	Skip
+;
+; Determines whether a given character is in the set
+; {A,Z,3,!}.
+;
+; Input:
+;	AL = character to check for inclusion in the set
+;
+; Output:
+;	Z if character is in TestSet, NZ otherwise
+;
+; Registers altered: none
+;
+CheckTestSetInclusion:
+	cmp	al,'A'	;is it 'A'?
+	jnz	CheckTestSetZ
+	ret		;yes, we're done
+CheckTestSetZ:
+	cmp	al,'Z'	;is it 'Z'?
+	jnz	CheckTestSet3
+	ret		;yes, we're done
+CheckTestSet3:
+	cmp	al,'3'	;is it '3'?
+	jnz	CheckTestSetEx
+	ret		;yes, we're done
+CheckTestSetEx:
+	cmp	al,'!'	;is it '!'?
+	ret		;the success status is already in
+			; the Zero flag
+;
+Skip:
+	call	ZTimerOn
+	mov	al,'A'
+	call	CheckTestSetInclusion	;check 'A'
+	mov	al,'Z'
+	call	CheckTestSetInclusion	;check 'Z'
+	mov	al,'3'
+	call	CheckTestSetInclusion	;check '3'
+	mov	al,'!'
+	call	CheckTestSetInclusion	;check '!'
+	mov	al,' '
+	call	CheckTestSetInclusion	;check space, so
+					; we've got a failed
+					; search
+	call	ZTimerOff
+```
 
-Then, too, if the characters tested are often not in the set, as may well be the case with such a small set, the branching-out approach of [Listing 11-20](#listing-11-20) will far outperform the branch-branch-branch approach of [Listing 13-3](#listing-13-3). When [Listing 11-20](#listing-11-20) is modified so that none of the five test characters is in the set, its overall execution time scarcely changes, rising by just 8 us, to 127 us. When [Listing 13-3](#listing-13-3) is modified similarly, however, its overall execution time rises by a considerably greater amount—26 us—to 159 us. This neatly illustrates the potential worst-case problem of repeated branching that we just discussed.
+Another relevant point is that the *worst-case* performance of [Listing 13-3](#listing-13-3) is much worse than that of Listing 11-20. [Listing 13-3](#listing-13-3) actually has a shorter best-case time than [Listing 11-20](chapter-11.md#listing-11-20), because no branches at all are performed when the test character is 'A'. On the other hand, [Listing 13-3](#listing-13-3) performs three branches when the test character is '!' or is not in the set, and that's two branches more than [Listing 11-20](chapter-11.md#listing-11-20) ever performs. When you're trying to make sure that code always responds within a certain time, worst-case performance can matter more than average performance.
+
+Then, too, if the characters tested are often not in the set, as may well be the case with such a small set, the branching-out approach of [Listing 11-20](chapter-11.md#listing-11-20) will far outperform the branch-branch-branch approach of [Listing 13-3](#listing-13-3). When [Listing 11-20](chapter-11.md#listing-11-20) is modified so that none of the five test characters is in the set, its overall execution time scarcely changes, rising by just 8 us, to 127 us. When [Listing 13-3](#listing-13-3) is modified similarly, however, its overall execution time rises by a considerably greater amount—26 us—to 159 us. This neatly illustrates the potential worst-case problem of repeated branching that we just discussed.
 
 There are two lessons here. The first and obvious lesson is that you should arrange your conditional jumps so that they fall through as often as possible. The second lesson is that you must understand the conditions under which your code will operate before you can truly optimize it.
 
-For instance, there's no way you can evaluate the relative merits of the versions of `CheckTestSetInclusion` in [Listings 11-20](#listing-11-20) and [13-3](#listing-13-3) until you know the mix of characters that will be tested. There's no such beast as an absolute measure of code speed, only code speed in context. You've heard that before as it relates to instruction mix and the prefetch queue, but here we're dealing with a different aspect of performance. What I mean now is that you must understand the typical and worst-case conditions under which a block of code will run before you can get a handle on its performance and consider possible alternatives.
+For instance, there's no way you can evaluate the relative merits of the versions of `CheckTestSetInclusion` in [Listings 11-20](chapter-11.md#listing-11-20) and [13-3](#listing-13-3) until you know the mix of characters that will be tested. There's no such beast as an absolute measure of code speed, only code speed in context. You've heard that before as it relates to instruction mix and the prefetch queue, but here we're dealing with a different aspect of performance. What I mean now is that you must understand the typical and worst-case conditions under which a block of code will run before you can get a handle on its performance and consider possible alternatives.
 
 Your ability to understand and respond to the circumstances under which your assembler code will run gives you a big leg up on high-level language compilers. There's no way for a compiler to know the typical and/or worst-case conditions under which code will run, let alone which of those conditions is more important in your application.
 
@@ -221,7 +381,9 @@ It may not *look* like working 32-bit negation code, but working code it is, bel
 
 In order to understand the brilliance of Dan's code, we first need to get a firm grasp on the mechanics of 32-bit negation. The basic principle of two's complement negation is that the value to be negated is first notted (that is, all its bits are flipped, from 1 to 0 or 0 to 1), and then incremented. For a 32-bit value stored in DX:AX, negation would ideally follow one of the two sequences shown in Figure 13.1, with all operations performed 32 bits at a time.
 
-![](images/fig13.1RT.png)
+![Description](../images/fig13.1RT.png)
+
+**Figure 13.1**
 
 Unfortunately, the 8088 can only handle data 16 bits at a time, so we must perform negation with a series of 16-bit operations like:
 
@@ -233,7 +395,9 @@ sbb   dx,-1
 
 as shown in Figure 13.2.
 
-![](images/fig13.2RT.png)
+![Description](../images/fig13.2RT.png)
+
+**Figure 13.2**
 
 The purpose of the first operation, notting DX with the `not` instruction, is obvious enough: flipping all the bits in the high word of the value. The purpose of the second operation, negating AX, is equally obvious: negating the low word of the value with the `neg` instruction, which both nots AX and increments it all at once.
 
@@ -241,17 +405,23 @@ After two instructions, we've successfully notted the entire 32-bit value in DX:
 
 When does DX need to be incremented? In one case only—when AX is originally 0, is notted to 0FFFFh, and is incremented back to 0, with a carry out from bit 15 of AX indicating that AX has turned over to 0 and so the notted value in DX must be incremented as well, as shown in Figure 13.3.
 
-![](images/fig13.3RT.png)
+![Description](../images/fig13.3RT.png)
+
+**Figure 13.3**
 
 In all other cases, incrementing the 32-bit notted value in DX:AX doesn't alter DX at all, since incrementing AX doesn't cause a carry out of bit 15 unless AX is 0FFFFh.
 
 However, due to the way that `neg` sets the Carry flag (as if subtraction from zero had occurred), the Carry flag is set by `neg` in all cases *except* the one case in which DX needs to be incremented. Consequently, after `neg ax` we subtract -1 from DX with borrow, with the 1 value of the Carry flag normally offsetting the -1, resulting in a subtraction of 0 from DX. In other words, DX remains unchanged when `neg ax` sets the Carry flag to 1, which is to say in all cases except when AX is originally zero. That's just what we want; in all those cases the 32-bit negation was actually complete after the first two instructions, since the increment of the notted 32-bit value doesn't affect DX, as shown in Figure 13.4.
 
-![](images/fig13.4RT.png)
+![Description](../images/fig13.4RT.png)
+
+**Figure 13.4**
 
 In the case where AX is originally 0, on the other hand, `neg ax` doesn't set the Carry flag. This is the one case in which DX must be incremented. In this one case only, `sbb dx,-1` succeeds in subtracting -1 from DX, since the Carry flag is 0. Again, that's what we want; in this one case DX is affected when the 32-bit value is incremented, and so incrementing DX completes the 32-bit negation, as shown in Figure 13.5.
 
-![](images/fig13.5RT.png)
+![Description](../images/fig13.5RT.png)
+
+**Figure 13.5**
 
 ### How Fast 32-Bit Negation Works
 
@@ -264,6 +434,115 @@ Improving the code is easy once we've recognized that the first two instructions
 Essentially, `jnc` is a faster way of doing nothing in the 64 K-1 cases where DX:AX already contains the negated value than `sbb dx,-1` is. Granted, `jnc` is also a slower way of incrementing DX in the one case where that's necessary, but that's so infrequent that we can readily trade those extra cycles for the cycles we save on the other cases.
 
 Let's try out the two 32-bit negates to see how they compare in actual use. [Listing 13-4](#listing-13-4), which uses the original nonbranching 32-bit negation code, runs in 2264 us. [Listing 13-5](#listing-13-5), which uses the branch-on-zero-AX approach to 32-bit negation, runs in 2193 us. A small improvement, to be sure—but it is nonetheless an improvement, and since the test code's 100:1 ratio of zero to non-zero values is much less than the real world's ratio of 64 K-1:1 (assuming evenly distributed values), the superiority of the branch-on-zero-AX approach is somewhat greater than this test indicates.
+
+#### Listing 13-4
+```nasm
+;
+; *** Listing 13-4 ***
+;
+; Negates several 32-bit values with non-branching code.
+;
+	jmp	Skip
+;
+; Negates a 32-bit value.
+;
+; Input:
+;	DX:AX = 32-bit value to negate
+;
+; Output:
+;	DX:AX = negated 32-bit value
+;
+; Registers altered: AX, DX
+;
+Negate32Bits:
+	neg	dx
+	neg	ax
+	sbb	dx,0
+	ret
+;
+Skip:
+	call	ZTimerOn
+; First, negate zero.
+	sub	dx,dx
+	mov	ax,dx	;0
+	call	Negate32Bits
+; Next, negate 1 through 50.
+X=1
+	rept	50
+	sub	dx,dx
+	mov	ax,X
+	call	Negate32Bits
+X=X+1
+	endm
+; Finally, negate -1 through -50.
+X=-1
+	rept	50
+	mov	dx,0ffffh
+	mov	ax,X
+	call	Negate32Bits
+X=X-1
+	endm
+	call	ZTimerOff
+```
+
+#### Listing 13-5
+```nasm
+;
+; *** Listing 13-5 ***
+;
+; Negates several 32-bit values using the branch-on-zero-AX
+; approach.
+;
+	jmp	Skip
+;
+; Negates a 32-bit value.
+;
+; Input:
+;	DX:AX = 32-bit value to negate
+;
+; Output:
+;	DX:AX = negated 32-bit value
+;
+; Registers altered: AX, DX
+;
+;-------------------------------------------------------
+; Branching-out exit for Negate32Bits when AX negates to
+; zero, necessitating an increment of DX.
+;
+Negate32BitsIncDX:
+	inc	dx
+	ret
+;
+Negate32Bits:
+	not	dx
+	neg	ax
+	jnc	Negate32BitsIncDX
+	ret
+;
+Skip:
+	call	ZTimerOn
+; First, negate zero.
+	sub	dx,dx
+	mov	ax,dx	;0
+	call	Negate32Bits
+; Next, negate 1 through 50.
+X=1
+	rept	50
+	sub	dx,dx
+	mov	ax,X
+	call	Negate32Bits
+X=X+1
+	endm
+; Finally, negate -1 through -50.
+X=-1
+	rept	50
+	mov	dx,0ffffh
+	mov	ax,X
+	call	Negate32Bits
+X=X-1
+	endm
+	call	ZTimerOff
+```
 
 By itself, speeding the negation of 32-bit values by a few cycles isn't particularly noteworthy. On the other hand, you must surely realize that if it was possible to speed up even the three-instruction, non-branching sequence that we started off with, then it must be possible to speed up just about any code, and that perception is important indeed.
 
@@ -313,11 +592,15 @@ I'll admit that it's more than a little peculiar to go out of our way to set AL 
 
 Consider this. If DL is less than or equal to 10, then the first example (the "normal" test-and-branch code) performs a `cmp dl,10` (4 cycles/2 bytes), a `ja DLGreaterThan10` that falls through (4 cycles/2 bytes), a `sub al,al` (3 cycles/2 bytes), and a `jmp short DLCheckDone` (15 cycles/2 bytes). The grand total: 26 cycles, 8 instruction bytes and one branch, as shown in Figure 13.6a.
 
-![](images/fig13.6RT.png)
+![Description](../images/fig13.6RT.png)
+
+**Figure 13.6**
 
 On the other hand, the preload code of the second example handles the same case with a `sub al,al` (3 cycles/2 bytes), a `cmp dl,10` (4 cycles/2 bytes), and a `jbe DLCheckDone` that branches (16 cycles/2 bytes). The total: 23 cycles, 6 instruction bytes and one branch, as shown in Figure 13.7a.
 
-![](images/fig13.7RT.png)
+![Description](../images/fig13.7RT.png)
+
+**Figure 13.7**
 
 That's not much faster than the normal approach, but it is faster.
 
@@ -328,6 +611,70 @@ The preload code of the second example handles the same DL greater than 10 case 
 In other words, the preload code is either 3 or 9 cycles faster than the more familiar test-and-branch code, is 2 bytes shorter overall, and sometimes branches less while never branching more. That's a clean sweep for the preload code—all because always performing one extra register load made it possible to do away with a branch.
 
 Let's run the two approaches through the Zen timer. [Listing 13-6](#listing-13-6), which times the test-and-branch code when DL is 10 (causing AL to be set to 0), runs in 10.06 us per test-and-branch. By contrast, [Listing 13-7](#listing-13-7), which times the preload code for the same case, runs in just 8.62 us.
+
+#### Listing 13-6
+```nasm
+;
+; *** Listing 13-6 ***
+;
+; Measures the time needed to set AL, based on the contents
+; of DL, with test-and-branch code (a branch is required no
+; matter what value DL contains).
+;
+;----------------------------------------------------------
+; Macro to perform the test of DL and setting of AL.
+; It's necessary to use a macro because the LOCAL directive
+; doesn't work properly inside REPT blocks with MASM.
+;
+TEST_DL_AND_SET_AL	macro
+	local	DLGreaterThan10, DLCheckDone
+	cmp	dl,10		;is DL greater than 10?
+	ja	DLGreaterThan10	;yes, so set AL to 1
+	sub	al,al		;DL is <= 10
+	jmp	short DLCheckDone
+DLGreaterThan10:
+	mov	al,1		;DL is greater than 10
+DLCheckDone:
+	endm
+;
+	mov	dl,10	;AL will always be set to 0
+	call	ZTimerOn
+	rept	1000
+	TEST_DL_AND_SET_AL
+	endm
+	call	ZTimerOff
+```
+
+#### Listing 13-7
+```nasm
+;
+; *** Listing 13-7 ***
+;
+; Measures the time needed to set AL, based on the contents
+; of DL, with preload code (a branch is required in only one
+; of the two possible cases).
+;
+;----------------------------------------------------------
+; Macro to perform the test of DL and setting of AL.
+; It's necessary to use a macro because the LOCAL directive
+; doesn't work properly inside REPT blocks with MASM.
+;
+TEST_DL_AND_SET_AL	macro
+	local	DLCheckDone
+	sub	al,al		;assume DL <= 10
+	cmp	dl,10		;is DL greater than 10?
+	jbe	DLCheckDone	;no, so AL is already set
+	mov	al,1		;DL is greater than 10
+DLCheckDone:
+	endm
+;
+	mov	dl,10	;AL will always be set to 0
+	call	ZTimerOn
+	rept	1000
+	TEST_DL_AND_SET_AL
+	endm
+	call	ZTimerOff
+```
 
 That's a healthy advantage for the preload code, but perhaps things will change if we test a case where AL is set to 1, by altering [Listings 13-6](#listing-13-6) and [13-7](#listing-13-7) to set DL to 11 rather than 10 prior to the tests.
 
@@ -351,11 +698,136 @@ Unlike the other flags, the Carry flag can serve as a direct operand to some ari
 
 For instance, suppose that we want to count the number of negative values in a 1000-word array, maintaining the count in DX. One way to do this is shown in [Listing 13-8](#listing-13-8), which runs in 12.29 ms. In this code, each value is anded with itself. The resulting setting of the Sign flag indicates whether the value is positive or negative. With the help of a conditional jump, the Sign flag setting controls whether DX is incremented or not.
 
+#### Listing 13-8
+```nasm
+;
+; *** Listing 13-8 ***
+;
+; Counts the number of negative values in a 1000-word array,
+; by comparing each element to 0 and branching accordingly.
+;
+	jmp	Skip
+;
+WordArray	label	word
+X=-500
+	rept	1000
+	dw	X
+X=X+1
+	endm
+WORD_ARRAY_LENGTH	equ	($-WordArray)
+;
+; Counts the number of negative values in a word-sized
+; array.
+;
+; Input:
+;	CX = length of array in words
+;	DS:SI = pointer to start of array
+;
+; Output:
+;	DX = count of negative values in array
+;
+; Registers altered: AX, CX, DX, SI
+;
+; Direction flag cleared
+;
+; Note: Does not handle arrays that are longer than 32K
+;	words or cross segment boundaries.
+;
+CountNegativeWords:
+	cld
+	sub	dx,dx	;initialize the count to 0
+CountNegativeWordsLoop:
+	lodsw		;get the next word from the array
+	and	ax,ax	;is the word negative?
+	jns	CountNegativeWordsLoopBottom
+			;not negative-do the next element
+	inc	dx	;word is negative, so increment the
+			; negative-word counter
+CountNegativeWordsLoopBottom:
+	loop	CountNegativeWordsLoop
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	si,offset WordArray
+			;point to the array to count
+			; the # of negative words in...
+	mov	cx,WORD_ARRAY_LENGTH/2
+			;...set the # of words to check...
+	call	CountNegativeWords
+			;...and count the negative words
+	call	ZTimerOff
+```
+
 Speedy and compact as it is, [Listing 13-8](#listing-13-8) *does* involve a conditional jump that branches about half the time... and by now you should be developing a distinct dislike for branching. By using the Carry flag to eliminate branching entirely, we can speed things up quite a bit.
+
+### Listing 13-9
+```nasm
+;
+; *** Listing 13-9 ***
+;
+; Counts the number of negative values in a 1000-word array,
+; by adding the Sign bit of each array element directly to
+; the register used for counting.
+;
+	jmp	Skip
+;
+WordArray	label	word
+X=-500
+	rept	1000
+	dw	X
+X=X+1
+	endm
+WORD_ARRAY_LENGTH	equ	($-WordArray)
+;
+; Counts the number of negative values in a word-sized
+; array.
+;
+; Input:
+;	CX = length of array in words
+;	DS:SI = pointer to start of array
+;
+; Output:
+;	DX = count of negative values in array
+;
+; Registers altered: AX, BX, CX, DX, SI
+;
+; Direction flag cleared
+;
+; Note: Does not handle arrays that are longer than 32K
+;	words or cross segment boundaries.
+;
+CountNegativeWords:
+	cld
+	sub	dx,dx	;initialize the count to 0
+	mov	bx,dx	;store the constant 0 in BX to speed
+			; up ADC in the loop
+CountNegativeWordsLoop:
+	lodsw		;get the next word from the array
+	shl	ax,1	;put the sign bit in the Carry flag
+	adc	dx,bx	;add the sign bit (via the Carry
+			; flag) to DX, since BX is 0
+CountNegativeWordsLoopBottom:
+	loop	CountNegativeWordsLoop
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	si,offset WordArray
+			;point to the array to count
+			; the # of negative words in...
+	mov	cx,WORD_ARRAY_LENGTH/2
+			;...set the # of words to check...
+	call	CountNegativeWords
+			;...and count the negative words
+	call	ZTimerOff
+```
 
 [Listing 13-9](#listing-13-9) does just that, shifting the sign bit of each tested value into the Carry flag and then adding it—along with zero, since `adc` requires two source operands—to DX, as shown in Figure 13.8. (Note that the constant zero is stored in BX for speed, since `adc dx,bx` is 1 byte shorter and 1 cycle faster than `adc dx,0`.) The result is that DX is incremented only when the sign bit of the value being tested is 1—that is, only when the value being tested is negative, which is exactly what we want.
 
-![](images/fig13.8RT.png)
+![Description](../images/fig13.8RT.png)
+
+**Figure 13.8**
 
 [Listing 13-9](#listing-13-9) runs in 10.80 ms. That's about 14% faster than [Listing 13-8](#listing-13-8), even though the instruction that increments DX in [Listing 13-9](#listing-13-9) (`adc dx,bx`) is actually 1 byte longer and 1 cycle slower than its counterpart in [Listing 13-8](#listing-13-8) (`inc dx`). The key to the improved performance is, once again, avoiding branching. In this case that's made possible by recognizing that a Carry flag-based operation can accomplish a task that we'd usually perform with a conditional jump. You wouldn't normally think to substitute `shl`/`adc` for `and`/`jns`/`inc`—they certainly don't *look* the least bit similar—but in this particular context the two instruction sequences are equivalent.
 
@@ -394,9 +866,80 @@ For example, suppose that you want to scan a string until you come to either a c
 
 That sort of thinking is likely to produce code like that shown in [Listing 13-10](#listing-13-10), which is a faithful line-by-line reproduction of the above sequence.
 
+#### Listing 13-10
+```nasm
+;
+; *** Listing 13-10 ***
+;
+; Finds the first occurrence of the letter 'z' in
+; a zero-terminated string, with a less-than-ideal
+; conditional jump followed by an unconditional jump at
+; the end of the loop.
+;
+	jmp	Skip
+;
+TestString	label	byte
+	db	'This is a test string that is '
+	db	'z'
+	db	'terminated with a zero byte...',0
+;
+; Finds the first occurrence of the specified byte in the
+; specified zero-terminated string.
+;
+; Input:
+;	AL = byte to find
+;	DS:SI = zero-terminated string to search
+;
+; Output:
+;	SI = pointer to first occurrence of byte in string,
+;		or 0 if the byte wasn't found
+;
+; Registers altered: AX, SI
+;
+; Direction flag cleared
+;
+; Note: Do not pass a string that starts at offset 0 (SI=0),
+;	since a match on the first byte and failure to find
+;	the byte would be indistinguishable.
+;
+; Note: Does not handle strings that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+FindCharInString:
+	mov	ah,al	;we'll need AL since that's the
+			; only register LODSB can use
+	cld
+FindCharInStringLoop:
+	lodsb		;get the next string byte
+	cmp	al,ah	;is this the byte we're
+			; looking for?
+	jz	FindCharInStringFound
+			;yes, so we're done with a match
+	and	al,al	;is this the terminating zero?
+	jz	FindCharInStringNotFound
+			;yes, so we're done with no match
+	jmp	FindCharInStringLoop
+			;check the next byte
+FindCharInStringFound:
+	dec	si	;point back to the matching byte
+	ret
+FindCharInStringNotFound:
+	sub	si,si	;we didn't find a match, so return
+			; 0 in SI
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	al,'z'		;byte value to find
+	mov	si,offset TestString
+				;string to search
+	call	FindCharInString ;search for the byte
+	call	ZTimerOff
+```
+
 [Listing 13-10](#listing-13-10) works perfectly well, finishing in 431 us. However, the loop in [Listing 13-10](#listing-13-10) ends with a conditional jump followed by an unconditional jump. With a little code rearrangement, the conditional jump can be made to handle both the test-for-zero and repeat-loop functions, and the unconditional jump can be done away with entirely. All we need do is put the "no-match"handling code right after the conditional jump and change the polarity of the jump from `jz` to `jnz`, so that the one conditional jump can either fall through if the terminating zero is found or repeat the loop otherwise.
 
-Back in Chapter 11 we saw [Listing 11-11](#listing-11-11), which features just such rearranged code. ([Listing 13-10](#listing-13-10) is actually [Listing 11-11](#listing-11-11) modified to illustrate the perils of using two jumps when one will do.) [Listing 11-11](#listing-11-11) runs in just 375 us. Not only is [Listing 11-11](#listing-11-11) faster than [Listing 13-10](#listing-13-10), it's also shorter by two bytes—the length of the eliminated jump.
+Back in Chapter 11 we saw [Listing 11-11](chapter-11.md#listing-11-11), which features just such rearranged code. ([Listing 13-10](#listing-13-10) is actually [Listing 11-11](chapter-11.md#listing-11-11) modified to illustrate the perils of using two jumps when one will do.) [Listing 11-11](chapter-11.md#listing-11-11) runs in just 375 us. Not only is [Listing 11-11](chapter-11.md#listing-11-11) faster than [Listing 13-10](#listing-13-10), it's also shorter by two bytes—the length of the eliminated jump.
 
 Look to streamline your code whenever you see a short unconditional jump paired with a conditional jump. Of course, it's not always possible to eliminate paired jumps, but you'd be surprised at how often loops can be compacted and speeded up with a little rearrangement.
 
@@ -471,7 +1014,9 @@ CheckY    endp
 
 The net effect: the code is 1 byte shorter, the time required for a branch is saved about half the time—*and there is absolutely no change in the logic of the code*. It's important that you understand that `jmp short` was basically a `nop` instruction in the first example, since all it did was unconditionally branch to another branching instruction, as shown in Figure 13.9.
 
-![](images/fig13.9RT.png)
+![Description](../images/fig13.9RT.png)
+
+**Figure 13.9**
 
 We removed the unconditional jump simply by replacing it with a copy of the code that it branched to.
 
@@ -542,9 +1087,169 @@ How can we apply this knowledge? By making every effort to use techniques such a
 
 Suppose that we want to determine whether there are more negative or non-negative values in an array of 8-bit signed values. [Listing 13-11](#listing-13-11) does that in 3.60 ms for the sample array by using a straightforward and compact test-and-branch approach.
 
+#### Listing 13-11
+```nasm
+;
+; *** Listing 13-11 ***
+;
+; Determines whether there are more non-negative or negative
+; elements in an array of 8-bit signed values, using a
+; standard test-and-branch approach and a single LOOP
+; instruction.
+;
+	jmp	Skip
+;
+ARRAY_LENGTH	equ	256
+ByteArray	label	byte
+X=0
+	rept	ARRAY_LENGTH
+	db	X
+X=X+1
+	endm
+;
+; Determines whether there are more non-negative or
+; negative elements in the specified array of 8-bit
+; signed values.
+;
+; Input:
+;	CX = length of array
+;	DS:SI = array to check
+;
+; Output:
+;	DX = signed count of the number of non-negative
+;		elements found in the array minus the number
+;		of negative elements found. (Zero if there
+;		are the same number of each type of element.
+;		Otherwise, sign bit set if there are more
+;		negative elements than non-negative
+;		elements, cleared if there are more
+;		non-negative elements than negative
+;		elements)
+;
+; Registers altered: AL, CX, DX, SI
+;
+; Direction flag cleared
+;
+; Note: Only useful if the surplus of non-negative
+;	elements over negative elements is less than
+;	32K, or if the surplus of negative elements
+;	over non-negative elements is less than or
+;	equal to 32K. Otherwise, the signed count
+;	returned in DX overflows.
+;
+; Note: Does not handle arrays that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+CountNegPos:
+	cld
+	sub	dx,dx	;initialize the count to zero
+CountNegPosLoop:
+	lodsb		;get the next byte to check
+	and	al,al	;see if it's negative or
+			; non-negative 
+	js	CountNeg ;it's negative
+	inc	dx	;count off one non-negative element
+	jmp	short CountNegPosLoopBottom
+CountNeg:
+	dec	dx	;count off one negative element
+CountNegPosLoopBottom:
+	loop	CountNegPosLoop
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	si,offset ByteArray	;array to check
+	mov	cx,ARRAY_LENGTH		;# of bytes to check
+	call	CountNegPos		;see whether there
+					; are more negative
+					; or non-negative
+					; elements
+	call	ZTimerOff
+```
+
 There's nothing wrong with [Listing 13-11](#listing-13-11), but there *is* an unconditional jump. We'd just as soon do away with that unconditional jump, especially since it's in a loop. Unfortunately, the instruction the unconditional jump branches to isn't a simple `ret`—it's a `loop` instruction, and we all know that loops must end in one place, at the loop bottom.
 
 *Hmmmm.* Why must loops end in one place? There's no particular reason that I can think of, apart from habit, so let's try duplicating some code and ending the loop in *two* places. [Listing 13-12](#listing-13-12), which does exactly that, runs in just 3.05 ms. That's an improvement of 18%—quite a return for the 1 byte the duplicated-code approach adds.
+
+#### Listing 13-12
+```nasm
+;
+; *** Listing 13-12 ***
+;
+; Determines whether there are more non-negative or negative
+; elements in an array of 8-bit signed values, using
+; duplicated code with two LOOP instructions and two RET
+; instructions.
+;
+	jmp	Skip
+;
+ARRAY_LENGTH	equ	256
+ByteArray	label	byte
+X=0
+	rept	ARRAY_LENGTH
+	db	X
+X=X+1
+	endm
+;
+; Determines whether there are more non-negative or
+; negative elements in the specified array of 8-bit
+; signed values.
+;
+; Input:
+;	CX = length of array
+;	DS:SI = array to check
+;
+; Output:
+;	DX = signed count of the number of non-negative
+;		elements found in the array minus the number
+;		of negative elements found. (Zero if there
+;		are the same number of each type of element.
+;		Otherwise, sign bit set if there are more
+;		negative elements than non-negative
+;		elements, cleared if there are more
+;		non-negative elements than negative
+;		elements)
+;
+; Registers altered: AL, CX, DX, SI
+;
+; Direction flag cleared
+;
+; Note: Only useful if the surplus of non-negative
+;	elements over negative elements is less than
+;	32K, or if the surplus of negative elements
+;	over non-negative elements is less than or
+;	equal to 32K. Otherwise, the signed count
+;	returned in DX overflows.
+;
+; Note: Does not handle arrays that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+CountNegPos:
+	cld
+	sub	dx,dx	;initialize the count to zero
+CountNegPosLoop:
+	lodsb		;get the next byte to check
+	and	al,al	;see if it's negative or
+			; non-negative 
+	js	CountNeg ;it's negative
+	inc	dx	;count off one non-negative element
+	loop	CountNegPosLoop
+	ret
+CountNeg:
+	dec	dx	;count off one negative element
+	loop	CountNegPosLoop
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	si,offset ByteArray	;array to check
+	mov	cx,ARRAY_LENGTH		;# of bytes to check
+	call	CountNegPos		;see whether there
+					; are more negative
+					; or non-negative
+					; elements
+	call	ZTimerOff
+```
 
 It's evident that eliminating branching instructions inside loops can result in handsome performance gains for relatively little effort. That's why I urge you to focus your optimization efforts on loops. While we're on this important topic, let's look at another way to eliminate branches inside loops.
 
@@ -554,13 +1259,300 @@ If you find yourself making a decision inside a loop, for heaven's sake see if y
 
 Consider [Listing 13-13](#listing-13-13), in which the contents of DL are used to decide whether to convert each character to uppercase while copying one string to another string. [Listing 13-13](#listing-13-13), which runs in 3.03 ms for the sample string, is representative of the situation in which a parameter passed to a subroutine selects between different modes of operation.
 
+#### Listing 13-13
+```nasm
+;
+; *** Listing 13-13 ***
+;
+; Copies a zero-terminated string to another string,
+; optionally converting characters to uppercase. The
+; decision as to whether to convert to uppercase is made
+; once for each character.
+;
+	jmp	Skip
+;
+SourceString	label	byte
+	db	'This is a sample string, consisting of '
+	db	'both uppercase and lowercase characters.'
+	db	0
+DestinationString	label	byte
+	db	100 dup (?)
+;
+; Copies a zero-terminated string to another string,
+; optionally converting characters to uppercase.
+;
+; Input:
+;	DL = 1 if conversion to uppercase during copying is
+;		desired, 0 otherwise
+;	DS:SI = source string
+;	ES:DI = destination string
+;
+; Output: none
+;
+; Registers altered: AL, SI, DI
+;
+; Direction flag cleared
+;
+; Note: Does not handle strings that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+CopyAndConvert:
+	cld
+CopyAndConvertLoop:
+	lodsb				;get the next byte
+					; to check
+	and	dl,dl			;conversion to
+					; uppercase desired?
+	jz	CopyAndConvertUC	;no
+	cmp	al,'a'			;less than 'a'?
+	jb	CopyAndConvertUC	;yes, not lowercase
+	cmp	al,'z'			;greater than 'z'?
+	ja	CopyAndConvertUC	;yes, not lowercase
+	and	al,not 20h		;make it uppercase
+CopyAndConvertUC:
+	stosb				;put the byte in the
+					; destination string
+	and	al,al			;was that the
+					; terminating zero?
+	jnz	CopyAndConvertLoop	;no, do next byte
+	ret
+;
+Skip:
+	call	ZTimerOn
+;
+; First, copy without converting to uppercase.
+;
+	mov	di,seg DestinationString
+	mov	es,di
+	mov	di,offset DestinationString
+			;ES:DI points to the destination
+	mov	si,offset SourceString
+			;DS:SI points to the source
+	sub	dl,dl	;don't convert to uppercase
+	call	CopyAndConvert	;copy without converting
+				; to uppercase
+;
+; Now copy and convert to uppercase.
+;
+	mov	di,offset DestinationString
+			;ES:DI points to the destination
+	mov	si,offset SourceString
+			;DS:SI points to the source
+	mov	dl,1	;convert to uppercase this time
+	call	CopyAndConvert	;copy and convert to
+				; uppercase
+	call	ZTimerOff
+```
+
 The failing of [Listing 13-13](#listing-13-13) is that the decision as to whether to convert to uppercase is made over and over, once for each character. We'd be much better off if we could make the decision just once at the start of the subroutine, moving the decision-making (particularly the branching) out of the loop.
 
 There are a number of ways to do this. One is shown in [Listing 13-14](#listing-13-14). Here, a single branch outside the loop is used to force the test for inclusion in the lowercase to function also as the test for whether conversion is desired. If conversion isn't desired, AH, which normally contains the start of the lowercase range, is set to 0FFh. This has the effect of causing the lowercase test always to fail on the first conditional jump if conversion isn't desired, just as was the case in [Listing 13-13](#listing-13-13). Consequently, performance stays just about the same when conversion to uppercase isn't desired.
 
+#### Listing 13-14
+```nasm
+;
+; *** Listing 13-14 ***
+;
+; Copies a zero-terminated string to another string,
+; optionally converting characters to uppercase. The
+; decision as to whether to convert to uppercase is made
+; once at the beginning of the subroutine; if conversion
+; is not desired, the register containing the value of the
+; start of the lowercase range is simply set to cause all
+; tests for lowercase to fail. This avoids one test in the
+; case where conversion to uppercase is desired, since the
+; single test for the start of the lowercase range is able
+; to perform both that test and the test for whether
+; conversion is desired.
+;
+	jmp	Skip
+;
+SourceString	label	byte
+	db	'This is a sample string, consisting of '
+	db	'both uppercase and lowercase characters.'
+	db	0
+DestinationString	label	byte
+	db	100 dup (?)
+;
+; Copies a zero-terminated string to another string,
+; optionally converting characters to uppercase.
+;
+; Input:
+;	DL = 1 if conversion to uppercase during copying is
+;		desired, 0 otherwise
+;	DS:SI = source string
+;	ES:DI = destination string
+;
+; Output: none
+;
+; Registers altered: AX, SI, DI
+;
+; Direction flag cleared
+;
+; Note: Does not handle strings that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+CopyAndConvert:
+	cld
+	mov	ah,0ffh	;assume conversion to uppercase is
+			; not desired. In that case, this
+			; value will cause the initial
+			; lowercase test to fail (except
+			; when the character is 0FFh, but
+			; that's rare and will be rejected
+			; by the second lowercase test
+	and	dl,dl	;is conversion to uppercase desired?
+	jz	CopyAndConvertLoop	;no, AH is all set
+	mov	ah,'a'	;set the proper lower limit of the
+			; lowercase range
+CopyAndConvertLoop:
+	lodsb				;get the next byte
+					; to check
+	cmp	al,ah			;less than 'a'?
+					; (If conversion
+					; isn't desired,
+					; AH is 0FFh, and
+					; this fails)
+	jb	CopyAndConvertUC	;yes, not lowercase
+	cmp	al,'z'			;greater than 'z'?
+	ja	CopyAndConvertUC	;yes, not lowercase
+	and	al,not 20h		;make it uppercase
+CopyAndConvertUC:
+	stosb				;put the byte in the
+					; destination string
+	and	al,al			;was that the
+					; terminating zero?
+	jnz	CopyAndConvertLoop	;no, do next byte
+	ret
+;
+Skip:
+	call	ZTimerOn
+;
+; First, copy without converting to uppercase.
+;
+	mov	di,seg DestinationString
+	mov	es,di
+	mov	di,offset DestinationString
+			;ES:DI points to the destination
+	mov	si,offset SourceString
+			;DS:SI points to the source
+	sub	dl,dl	;don't convert to uppercase
+	call	CopyAndConvert	;copy without converting
+				; to uppercase
+;
+; Now copy and convert to uppercase.
+;
+	mov	di,offset DestinationString
+			;ES:DI points to the destination
+	mov	si,offset SourceString
+			;DS:SI points to the source
+	mov	dl,1	;convert to uppercase this time
+	call	CopyAndConvert	;copy and convert to
+				; uppercase
+	call	ZTimerOff
+```
+
 However, when lowercase conversion *is* desired, [Listing 13-14](#listing-13-14) performs one less test each time through the loop than does [Listing 13-13](#listing-13-13), because a separate test to find out whether conversion is desired is no longer needed. We've already performed the test for whether conversion is desired at the start of the subroutine—outside the loop—so the code inside the loop can sail through the copy-and-convert process at full speed. The result is that [Listing 13-14](#listing-13-14) runs in 2.76 ms, significantly faster than [Listing 13-13](#listing-13-13).
 
 In [Listing 13-14](#listing-13-14), we've really only moved the test as to whether conversion is desired out of the loop in the case where conversion is indeed desired. When conversion isn't desired, a branch is still performed every time through the loop, just as in [Listing 13-13](#listing-13-13). If we're willing to duplicate a bit of code, we can also move the branch out of the loop when conversion isn't desired, as shown in [Listing 13-15](#listing-13-15). There's a cost in size for this optimization—7 bytes—but execution time is cut to just 2.35 us, a 29% improvement over [Listing 13-13](#listing-13-13).
+
+#### Listing 13-15
+```nasm
+;
+; *** Listing 13-15 ***
+;
+; Copies a zero-terminated string to another string,
+; optionally converting characters to uppercase. The
+; decision as to whether to convert to uppercase is made
+; once at the beginning of the subroutine, with separate
+; code executed depending on whether conversion is desired
+; or not.
+;
+	jmp	Skip
+;
+SourceString	label	byte
+	db	'This is a sample string, consisting of '
+	db	'both uppercase and lowercase characters.'
+	db	0
+DestinationString	label	byte
+	db	100 dup (?)
+;
+; Copies a zero-terminated string to another string,
+; optionally converting characters to uppercase.
+;
+; Input:
+;	DL = 1 if conversion to uppercase during copying is
+;		desired, 0 otherwise
+;	DS:SI = source string
+;	ES:DI = destination string
+;
+; Output: none
+;
+; Registers altered: AL, SI, DI
+;
+; Direction flag cleared
+;
+; Note: Does not handle strings that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+CopyAndConvert:
+	cld
+	and	dl,dl		;is conversion desired?
+	jz	CopyLoop	;no, so just copy the string
+;
+; Copy the string, converting to uppercase.
+;
+CopyAndConvertLoop:
+	lodsb				;get the next byte
+					; to check
+	cmp	al,'a'			;less than 'a'?
+	jb	CopyAndConvertUC	;yes, not lowercase
+	cmp	al,'z'			;greater than 'z'?
+	ja	CopyAndConvertUC	;yes, not lowercase
+	and	al,not 20h		;make it uppercase
+CopyAndConvertUC:
+	stosb				;put the byte in the
+					; destination string
+	and	al,al			;was that the
+					; terminating zero?
+	jnz	CopyAndConvertLoop	;no, do next byte
+	ret
+;
+; Copy the string without conversion to uppercase.
+;
+CopyLoop:
+	lodsb			;get the next byte to check
+	stosb			;copy the byte
+	and	al,al		;was that the terminating 0?
+	jnz	CopyLoop	;no, do next byte
+	ret
+;
+Skip:
+	call	ZTimerOn
+;
+; First, copy without converting to uppercase.
+;
+	mov	di,seg DestinationString
+	mov	es,di
+	mov	di,offset DestinationString
+			;ES:DI points to the destination
+	mov	si,offset SourceString
+			;DS:SI points to the source
+	sub	dl,dl	;don't convert to uppercase
+	call	CopyAndConvert	;copy without converting
+				; to uppercase
+;
+; Now copy and convert to uppercase.
+;
+	mov	di,offset DestinationString
+			;ES:DI points to the destination
+	mov	si,offset SourceString
+			;DS:SI points to the source
+	mov	dl,1	;convert to uppercase this time
+	call	CopyAndConvert	;copy and convert to
+				; uppercase
+	call	ZTimerOff
+```
 
 Moreover, [Listing 13-15](#listing-13-15) could easily be speeded up further by using the word-at-a-time or `scas`/`movs` techniques we encountered in Chapter 11. Why is it easier to do this to [Listing 13-15](#listing-13-15) than to [Listing 13-13](#listing-13-13)? It's easier because we've completely separated the instruction sequences for the two modes of operation of the subroutine, so we have fewer instructions and simpler code to optimize in whichever case we try to speed up.
 
@@ -582,11 +1574,278 @@ Fine, you say, but what's the alternative? After all, subroutines are fundamenta
 
 By and large, that's true, but inside time-critical loops there's no reason why we can't eliminate calls simply by moving the called code into the loop. Replacing the subroutine call with a macro is the simplest way to do this. For example, suppose that we have a subroutine called `IsPrintable`, which tests whether the character in AL is a printable character (in the range 20h to 7Eh). [Listing 13-16](#listing-13-16) shows a loop that calls this subroutine in the process of copying only printable characters from one string to another string. Call and all, [Listing 13-16](#listing-13-16) runs in 3.48 ms for the test string.
 
+#### Listing 13-16
+```nasm
+;
+; *** Listing 13-16 ***
+;
+; Copies a zero-terminated string to another string,
+; filtering out non-printable characters by means of a
+; subroutine that performs the test.
+;
+	jmp	Skip
+;
+SourceString	label	byte
+	db	'This is a sample string, consisting of '
+X=1
+	rept	31
+	db	X
+X=X+1
+	endm
+	db	7fh
+	db	'both printable and non-printable '
+	db	'characters', 0
+DestinationString	label	byte
+	db	200 dup (?)
+;
+; Determines whether a character is printable (in the range
+; 20h through 7Eh).
+;
+; Input:
+;	AL = character to check
+;
+; Output:
+;	Zero flag set to 1 if character is printable,
+;		set to 0 otherwise
+;
+; Registers altered: none
+;
+IsPrintable:
+	cmp	al,20h
+	jb	IsPrintableDone	;not printable
+	cmp	al,7eh
+	ja	IsPrintableDone	;not printable
+	cmp	al,al	;set the Zero flag to 1, since the
+			; character is printable
+IsPrintableDone:
+	ret
+;
+; Copies a zero-terminated string to another string,
+; filtering out non-printable characters.
+;
+; Input:
+;	DS:SI = source string
+;	ES:DI = destination string
+;
+; Output: none
+;
+; Registers altered: AL, SI, DI
+;
+; Direction flag cleared
+;
+; Note: Does not handle strings that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+CopyPrintable:
+	cld
+CopyPrintableLoop:
+	lodsb			;get the next byte to copy
+	call	IsPrintable	;is it printable?
+	jnz	NotPrintable	;nope, don't copy it
+	stosb			;put the byte in the
+	     			; destination string
+	jmp	CopyPrintableLoop ;the character was
+				; printable, so it couldn't
+				; possibly have been 0. No
+				; need to check whether it
+				; terminated the string
+NotPrintable:
+	and	al,al		;was that the
+				; terminating zero?
+	jnz	CopyPrintableLoop ;no, do next byte
+	stosb			;copy the terminating zero
+	ret			;done
+;
+Skip:
+	call	ZTimerOn
+	mov	di,seg DestinationString
+	mov	es,di
+	mov	di,offset DestinationString
+			;ES:DI points to the destination
+	mov	si,offset SourceString
+			;DS:SI points to the source
+	call	CopyPrintable	;copy the printable
+				; characters
+	call	ZTimerOff
+```
+
 [Listing 13-17](#listing-13-17) is functionally identical to [Listing 13-16](#listing-13-16). In [Listing 13-17](#listing-13-17), however, the call to the subroutine `IsPrintable` has been converted to the expansion of the macro `IS_PRINTABLE`, eliminating the `call` and `ret` instructions. How much difference does that change from call to macro expansion make? [Listing 13-17](#listing-13-17) runs in 2.21 ms, 57% faster than [Listing 13-16](#listing-13-16). [Listing 13-16](#listing-13-16)*spends over one-third of its entire execution time simply calling `IsPrintable` and returning from that subroutine!*
+
+#### Listing 13-17
+```nasm
+;
+; *** Listing 13-17 ***
+;
+; Copies a zero-terminated string to another string,
+; filtering out non-printable characters by means of a
+; macro that performs the test.
+;
+	jmp	Skip
+;
+SourceString	label	byte
+	db	'This is a sample string, consisting of '
+X=1
+	rept	31
+	db	X
+X=X+1
+	endm
+	db	7fh
+	db	'both printable and non-printable '
+	db	'characters', 0
+DestinationString	label	byte
+	db	200 dup (?)
+;
+; Macro that determines whether a character is printable (in
+; the range 20h through 7Eh).
+;
+; Input:
+;	AL = character to check
+;
+; Output:
+;	Zero flag set to 1 if character is printable,
+;		set to 0 otherwise
+;
+; Registers altered: none
+;
+IS_PRINTABLE	macro
+	local	IsPrintableDone
+	cmp	al,20h
+	jb	IsPrintableDone	;not printable
+	cmp	al,7eh
+	ja	IsPrintableDone	;not printable
+	cmp	al,al	;set the Zero flag to 1, since the
+			; character is printable
+IsPrintableDone:
+	endm
+;
+; Copies a zero-terminated string to another string,
+; filtering out non-printable characters.
+;
+; Input:
+;	DS:SI = source string
+;	ES:DI = destination string
+;
+; Output: none
+;
+; Registers altered: AL, SI, DI
+;
+; Direction flag cleared
+;
+; Note: Does not handle strings that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+CopyPrintable:
+	cld
+CopyPrintableLoop:
+	lodsb			;get the next byte to copy
+	IS_PRINTABLE		;is it printable?
+	jnz	NotPrintable	;nope, don't copy it
+	stosb			;put the byte in the
+	     			; destination string
+	jmp	CopyPrintableLoop ;the character was
+				; printable, so it couldn't
+				; possibly have been 0. No
+				; need to check whether it
+				; terminated the string
+NotPrintable:
+	and	al,al		;was that the
+				; terminating zero?
+	jnz	CopyPrintableLoop ;no, do next byte
+	stosb			;copy the terminating zero
+	ret			;done
+;
+Skip:
+	call	ZTimerOn
+	mov	di,seg DestinationString
+	mov	es,di
+	mov	di,offset DestinationString
+			;ES:DI points to the destination
+	mov	si,offset SourceString
+			;DS:SI points to the source
+	call	CopyPrintable	;copy the printable
+				; characters
+	call	ZTimerOff
+```
 
 While the superior performance of [Listing 13-17](#listing-13-17) clearly illustrates the price paid for subroutine calls, that listing by no means applies all of the optimizations made possible by the elimination of the calls that plagued [Listing 13-16](#listing-13-16). It's true that the macro `IS_PRINTABLE` eliminates the subroutine call, but there are still internal branches in `IS_PRINTABLE`, and there's still a `cmp` instruction that sets the Zero flag on success. In other words, [Listing 13-17](#listing-13-17) hasn't taken full advantage of moving the code into the loop; it has simply taken the call and return overhead out of determining whether a character is printable.
 
 [Listing 13-18](#listing-13-18) does take full advantage of moving the test code into the loop, by eliminating the macro and thereby eliminating the need to place a return status in the Zero flag. Instead, [Listing 13-18](#listing-13-18) branches directly to `NotPrintable` if a character is found to be non-printable, eliminating the intermediate conditional jump that [Listing 13-17](#listing-13-17) performed. It's also no longer necessary to test the Zero flag to see whether the character is printable before storing it in the destination array, since any character that passes the two comparisons for inclusion in the printable range must be printable. The upshot is that [Listing 13-18](#listing-13-18) runs in just 1.74 ms, 27% faster than [Listing 13-17](#listing-13-17) and 100% faster than [Listing 13-16](#listing-13-16).
+
+#### Listing 13-8
+```nasm
+;
+; *** Listing 13-18 ***
+;
+; Copies a zero-terminated string to another string,
+; filtering out non-printable characters by means of
+; carefully customized code that performs the test
+; directly in the loop.
+;
+	jmp	Skip
+;
+SourceString	label	byte
+	db	'This is a sample string, consisting of '
+X=1
+	rept	31
+	db	X
+X=X+1
+	endm
+	db	7fh
+	db	'both printable and non-printable '
+	db	'characters', 0
+DestinationString	label	byte
+	db	200 dup (?)
+;
+; Copies a zero-terminated string to another string,
+; filtering out non-printable characters.
+;
+; Input:
+;	DS:SI = source string
+;	ES:DI = destination string
+;
+; Output: none
+;
+; Registers altered: AL, SI, DI
+;
+; Direction flag cleared
+;
+; Note: Does not handle strings that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+CopyPrintable:
+	cld
+CopyPrintableLoop:
+	lodsb			;get the next byte to copy
+	cmp	al,20h
+	jb	NotPrintable	;not printable
+	cmp	al,7eh
+	ja	CopyPrintableLoop ;not printable
+	stosb			;put the byte in the
+	     			; destination string
+	jmp	CopyPrintableLoop ;the character was
+				; printable, so it couldn't
+				; possibly have been 0. No
+				; need to check whether it
+				; terminated the string
+NotPrintable:
+	and	al,al		;was that the
+				; terminating zero?
+	jnz	CopyPrintableLoop ;no, do next byte
+	stosb			;copy the terminating zero
+	ret			;done
+;
+Skip:
+	call	ZTimerOn
+	mov	di,seg DestinationString
+	mov	es,di
+	mov	di,offset DestinationString
+			;ES:DI points to the destination
+	mov	si,offset SourceString
+			;DS:SI points to the source
+	call	CopyPrintable	;copy the printable
+				; characters
+	call	ZTimerOff
+```
 
 [Listing 13-18](#listing-13-18) illustrates two useful optimizations in the case where a character is found to be printable. First, there's no need to branch to the bottom of the loop just to branch back to the top of the loop, so [Listing 13-18](#listing-13-18) just branches directly to the top of the loop after storing each printable character. The same is done when a non-printable character greater than 7Eh is detected. The point here is that it's fine to branch back to the top of a loop from multiple places. Second, there's no way that a printable character can end a string (zero isn't a printable character), so we don't bother testing for the terminating zero after storing a printable character; again, the same is true for non-printable characters greater than 7Eh. When you duplicate code, it's not necessary to duplicate any portion of the code that performs no useful function in the new location.
 
@@ -620,6 +1879,53 @@ You see, `loop` is a branching instruction, and not an especially fast branching
 
 Look at it this way. Suppose you have a program containing a loop that zeros the high bit of each byte in a 100-byte array, as shown in [Listing 13-19](#listing-13-19), which runs in 1023 us. What percent of that overall execution time do you suppose this program spends just decrementing CX and branching back to the top of the loop—that is, looping? Ten percent?
 
+#### Listing 13-19
+```nasm
+;
+; *** Listing 13-19 ***
+;
+; Zeros the high-bit of each byte in a 100-byte array,
+; using the LOOP instruction.
+;
+	jmp	Skip
+;
+ARRAY_LENGTH	equ	100
+ByteArray	label	byte
+	db	ARRAY_LENGTH dup (80h)
+;
+; Clears the high bit of each byte in an array of
+; length ARRAY_LENGTH.
+;
+; Input:
+;	BX = pointer to the start of the array to clear
+;
+; Output: none
+;
+; Registers altered: AL, BX, CX
+;
+ClearHighBits:
+	mov	cx,ARRAY_LENGTH		;# of bytes to clear
+	mov	al,not 80h		;pattern to clear
+					; high bits with
+ClearHighBitsLoop:
+	and	[bx],al			;clear the high bit
+					; of this byte
+	inc	bx			;point to the next
+					; byte
+	loop	ClearHighBitsLoop	;repeat until we're
+					; out of bytes
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	bx,offset ByteArray
+				;array in which to clear
+				; high bits
+	call	ClearHighBits	;clear the high bits of the
+				; bytes
+	call	ZTimerOff
+```
+
 No. Twenty percent?
 
 No.
@@ -638,11 +1944,58 @@ Well, `loop` is used to repeat a given sequence of instructions multiple times..
 
 Heck, that's *easy*. We'll eliminate branching and loop counting entirely by *literally* repeating the instructions, as shown in Figure 13.10.
 
-![](images/fig13.10RT.png)
+![Description](../images/fig13.10RT.png)
+
+**Figure 13.10**
 
 Instead of using `loop` to execute the same code, say, 10 times, we'll just line up 10 repetitions of the code inside the loop, and then execute the 10 repetitions one after another. This is known as *in-line code*, because the repetitions of the code are lined up in order rather than being separated by branches. (In-line code is sometimes used to refer to subroutine code that's brought into the main code, eliminating a call, a technique we discussed in the last section. However, I'm going to use the phrase "in-line code" only to refer to code that's repeated by assembling multiple instances and running them back-to-back rather than in a loop.)
 
 [Listing 13-20](#listing-13-20) shows in-line code used to speed up [Listing 13-19](#listing-13-19). The `loop` instruction is gone, replaced with a `rept` directive that creates 100 back-to-back instances of the code inside the loop of [Listing 13-19](#listing-13-19). The performance improvement is dramatic: [Listing 13-20](#listing-13-20) runs in 557 us, more than 83% faster than [Listing 13-19](#listing-13-19).
+
+#### Listing 13-20
+```nasm
+;
+; *** Listing 13-20 ***
+;
+; Zeros the high-bit of each byte in a 100-byte array,
+; using in-line code.
+;
+	jmp	Skip
+;
+ARRAY_LENGTH	equ	100
+ByteArray	label	byte
+	db	ARRAY_LENGTH dup (80h)
+;
+; Clears the high bit of each byte in an array of
+; length ARRAY_LENGTH.
+;
+; Input:
+;	BX = pointer to the start of the array to clear
+;
+; Output: none
+;
+; Registers altered: AL, BX
+;
+ClearHighBits:
+	mov	al,not 80h		;pattern to clear
+					; high bits with
+	rept	ARRAY_LENGTH		;# of bytes to clear
+	and	[bx],al			;clear the high bit
+					; of this byte
+	inc	bx			;point to the next
+					; byte
+	endm
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	bx,offset ByteArray
+				;array in which to clear
+				; high bits
+	call	ClearHighBits	;clear the high bits of the
+				; bytes
+	call	ZTimerOff
+```
 
 Often-enormous improvement in performance is the good news about in-line code. Often-enormous increase in code size—depending on the number of repetitions and the amount of code in the loop—is the bad news. [Listing 13-20](#listing-13-20) is nearly 300 bytes larger than [Listing 13-19](#listing-13-19). On the other hand, we're talking about nearly doubling performance by adding those extra bytes. Yes, once again we've encountered the trade-off between bytes and cycles that pops up so often when we set out to improve performance: in-line code can be used to speed up just about any loop, but the cost in bytes ranges from modest to prohibitively high. Still, when you need flat-out performance, in-line code is a tried and true way to get a sizable performance boost.
 
@@ -650,15 +2003,183 @@ In-line code has another benefit beside eliminating branching. When in-line code
 
 You may well object at this point that in-line code is fine when the number of repetitions of a loop is known in advance and is always the same, but how often is that the case? Not all that often, I admit, but it does happen. For example, think back to our animation examples in Chapter 11. The example that used exclusive-or-based animation looped once for each word exclusive-ored into display memory, and always drew the same number of words per line. That sounds like an excellent candidate for in-line code, and in fact it is.
 
-[Listing 13-21](#listing-13-21) shows the `XorImage` subroutine from [Listing 11-33](#listing-11-33) revised to use in-line code to draw each line without branching. Instead, the four instructions that draw the four words of the image are duplicated four times, in order to draw a whole line at a time. This frees up not only CX but also BP, which in [Listing 11-33](#listing-11-33) was used to reload the number of words per line each time through the loop. That has a ripple effect which lets us avoid using BX, saving a `push` and a `pop`, and also allows us to store the offset from odd lines to even lines in a register for added speed.
+[Listing 13-21](#listing-13-21) shows the `XorImage` subroutine from [Listing 11-33](chapter-11.md#listing-11-33) revised to use in-line code to draw each line without branching. Instead, the four instructions that draw the four words of the image are duplicated four times, in order to draw a whole line at a time. This frees up not only CX but also BP, which in [Listing 11-33](chapter-11.md#listing-11-33) was used to reload the number of words per line each time through the loop. That has a ripple effect which lets us avoid using BX, saving a `push` and a `pop`, and also allows us to store the offset from odd lines to even lines in a register for added speed.
 
-The net effect of the in-line code in [Listing 13-21](#listing-13-21) is far from trivial. When this version of `XorImage` is substituted for the version in [Listing 11-33](#listing-11-33), execution time drops from 30.29 seconds to 24.21 seconds, a 25% improvement in overall performance. Put another way, the `loop` instructions in the two loops that draw the even and odd lines in [Listing 11-33](#listing-11-33) take up about one out of every five cycles that the entire program uses! Bear in mind that we're not talking now about a program that zeros the high bits of bytes in three-instruction loops; we're talking about a program that performs complex animation and accesses display memory heavily... in other words, a program that does many time-consuming things besides looping.
+#### Listing 13-21
+```nasm
+;
+; *** Listing 13-21 ***
+;
+; Replacement code for XorImage in Listing 11-33.
+; This version uses in-line code to eliminate branching
+; during the drawing of each image line.
+;----------------------------------------------------------
+; Exclusive-ors the image of a 3-color square at the
+; specified screen location. Assumes images start on
+; even-numbered scan lines and are an even number of
+; scan lines high. Always draws images byte-aligned in
+; display memory.
+;
+; Input:
+;	CX = X coordinate of upper left corner at which to
+;		draw image (will be adjusted to nearest
+;		less-than or equal-to multiple of 4 in order
+;		to byte-align)
+;	DX = Y coordinate of upper left corner at which to
+;		draw image
+;	ES = display memory segment
+;
+; Output: none
+;
+; Registers altered: AX, CX, DX, SI, DI, BP
+;
+XorImage:
+	shr	dx,1	;divide the row # by 2 to compensate
+			; for the 2-bank nature of 320x200
+			; 4-color mode
+	mov	ax,SCREEN_WIDTH
+	mul	dx	;start offset of top row of image in
+			; display memory
+	shr	cx,1	;divide the X coordinate by 4
+	shr	cx,1	; because there are 4 pixels per
+			; byte
+	add	ax,cx	;point to the offset at which the
+			; upper left byte of the image will
+			; go
+	mov	di,ax
+	mov	si,offset TheImage
+			;point to the start of the one image
+			; we always draw
+	mov	dx,BANK_OFFSET-IMAGE_WIDTH
+			;offset from the end of an even line
+			; of the image in display memory to
+			; the start of the next odd line of
+			; the image
+	mov	bp,BANK_OFFSET-SCREEN_WIDTH+IMAGE_WIDTH
+			;offset from the end of an odd line
+			; of the image in display memory to
+			; the start of the next even line of
+			; the image
+	mov	cx,IMAGE_HEIGHT/2
+			;# of even/odd numbered row pairs to
+			;  draw in the image
+XorRowLoop:
+	rept	IMAGE_WIDTH/2
+	lodsw		;next word of the image pattern
+	xor	es:[di],ax	;XOR the next word of the
+				; image into the screen
+	inc	di	;point to the next word in display
+	inc	di	; memory
+	endm
+	add	di,dx	;point to the start of the next
+			; (odd) row of the image, which is
+			; in the second bank of display
+			; memory
+	rept	IMAGE_WIDTH/2
+	lodsw		;next word of the image pattern
+	xor	es:[di],ax	;XOR the next word of the
+				; image into the screen
+	inc	di	;point to the next word in display
+	inc	di	; memory
+	endm
+	sub	di,bp	;point to the start of the next
+			; (even) row of the image, which is
+			; in the first bank of display
+			; memory
+	loop	XorRowLoop	;count down the row pairs
+	ret
+```
 
-To drive the point home, let's modify [Listing 11-34](#listing-11-34) to use in-line code, as well. [Listing 11-34](#listing-11-34) uses `rep movsw` to draw each line, so there are no branches to get rid of during line drawing, and consequently no way to put in-line code to work there. There is, however, a loop that's used to repeat the drawing of each pair of rows in the image. That's not *nearly* so intensive a loop as the line-drawing loop was in [Listing 11-33](#listing-11-33); instead of being repeated once for every word that's drawn, it's repeated just once every two lines, or 10 words.
+The net effect of the in-line code in [Listing 13-21](#listing-13-21) is far from trivial. When this version of `XorImage` is substituted for the version in [Listing 11-33](chapter-11.md#listing-11-33), execution time drops from 30.29 seconds to 24.21 seconds, a 25% improvement in overall performance. Put another way, the `loop` instructions in the two loops that draw the even and odd lines in [Listing 11-33](chapter-11.md#listing-11-33) take up about one out of every five cycles that the entire program uses! Bear in mind that we're not talking now about a program that zeros the high bits of bytes in three-instruction loops; we're talking about a program that performs complex animation and accesses display memory heavily... in other words, a program that does many time-consuming things besides looping.
 
-Nonetheless, when the in-line version of `BlockDrawImage` shown in [Listing 13-22](#listing-13-22) is substituted for the version in [Listing 11-34](#listing-11-34), overall execution time drops from 10.35 seconds to 9.69 seconds, an improvement of nearly 7%. Not earthshaking—but in demanding applications such as animation, where every cycle counts, it's certainly worth expending a few hundred extra bytes to get that extra speed.
+To drive the point home, let's modify [Listing 11-34](chapter-11.md#listing-11-34) to use in-line code, as well. [Listing 11-34](chapter-11.md#listing-11-34) uses `rep movsw` to draw each line, so there are no branches to get rid of during line drawing, and consequently no way to put in-line code to work there. There is, however, a loop that's used to repeat the drawing of each pair of rows in the image. That's not *nearly* so intensive a loop as the line-drawing loop was in [Listing 11-33](chapter-11.md#listing-11-33); instead of being repeated once for every word that's drawn, it's repeated just once every two lines, or 10 words.
 
-The 7% improvement we got with [Listing 13-22](#listing-13-22) is more impressive when you consider that the bulk of the work in [Listing 11-34](#listing-11-34) is done with `rep movsw`. If you take a moment to contemplate the knowledge that 7% of overall execution time in [Listing 11-34](#listing-11-34) is used by just 20 `dec dx`/`jnz` pairs per image draw (and remember that cycle-eating display memory is accessed 400 times for every 20 `dec dx`/`jnz` pairs executed), you'll probably reach the conclusion that `loop` really isn't a very good instruction for high-performance looping.
+Nonetheless, when the in-line version of `BlockDrawImage` shown in [Listing 13-22](#listing-13-22) is substituted for the version in [Listing 11-34](chapter-11.md#listing-11-34), overall execution time drops from 10.35 seconds to 9.69 seconds, an improvement of nearly 7%. Not earthshaking—but in demanding applications such as animation, where every cycle counts, it's certainly worth expending a few hundred extra bytes to get that extra speed.
+
+#### Listing 13-22
+```nasm
+;
+; *** Listing 13-22 ***
+;
+; Replacement code for BlockDrawImage in Listing 11-34.
+; This version uses in-line code to eliminate branching
+; entirely during the drawing of each image (eliminates
+; the branching between the drawing of each pair of lines.)
+;----------------------------------------------------------
+; Block-move draws the image of a 3-color square at the
+; specified screen location. Assumes images start on
+; even-numbered scan lines and are an even number of
+; scan lines high. Always draws images byte-aligned in
+; display memory.
+;
+; Input:
+;	CX = X coordinate of upper left corner at which to
+;		draw image (will be adjusted to nearest
+;		less-than or equal-to multiple of 4 in order
+;		to byte-align)
+;	DX = Y coordinate of upper left corner at which to
+;		draw image
+;	ES = display memory segment
+;
+; Output: none
+;
+; Registers altered: AX, CX, DX, SI, DI, BP
+;
+BlockDrawImage:
+	shr	dx,1	;divide the row # by 2 to compensate
+			; for the 2-bank nature of 320x200
+			; 4-color mode
+	mov	ax,SCREEN_WIDTH
+	mul	dx	;start offset of top row of image in
+			; display memory
+	shr	cx,1	;divide the X coordinate by 4
+	shr	cx,1	; because there are 4 pixels per
+			; byte
+	add	ax,cx	;point to the offset at which the
+			; upper left byte of the image will
+			; go
+	mov	di,ax
+	mov	si,offset TheImage
+			;point to the start of the one image
+			; we always draw
+	mov	ax,BANK_OFFSET-SCREEN_WIDTH+IMAGE_WIDTH
+			;offset from the end of an odd line
+			; of the image in display memory to
+			; the start of the next even line of
+			; the image
+	mov	dx,BANK_OFFSET-IMAGE_WIDTH
+			;offset from the end of an even line
+			; of the image in display memory to
+			; the start of the next odd line of
+			; the image
+	mov	bp,IMAGE_WIDTH/2
+			;# of words to draw per row of the
+			; image. Note that IMAGE_WIDTH must
+			; be an even number since we XOR
+			; the image a word at a time
+	rept	IMAGE_HEIGHT/2
+	mov	cx,bp	;# of words to draw per row of the
+			; image
+	rep	movsw	;draw a whole even row with this one
+			; repeated instruction
+	add	di,dx	;point to the start of the next
+			; (odd) row of the image, which is
+			; in the second bank of display
+			; memory
+	mov	cx,bp	;# of words to draw per row of the
+			; image
+	rep	movsw	;draw a whole odd row with this one
+			; repeated instruction
+	sub	di,ax
+			;point to the start of the next
+			; (even) row of the image, which is
+			; in the first bank of display
+			; memory
+	endm
+	ret
+```
+
+The 7% improvement we got with [Listing 13-22](#listing-13-22) is more impressive when you consider that the bulk of the work in [Listing 11-34](chapter-11.md#listing-11-34) is done with `rep movsw`. If you take a moment to contemplate the knowledge that 7% of overall execution time in [Listing 11-34](chapter-11.md#listing-11-34) is used by just 20 `dec dx`/`jnz` pairs per image draw (and remember that cycle-eating display memory is accessed 400 times for every 20 `dec dx`/`jnz` pairs executed), you'll probably reach the conclusion that `loop` really isn't a very good instruction for high-performance looping.
 
 And you'll be right.
 
@@ -668,11 +2189,95 @@ What we've just seen is "pure" in-line code, where a loop that's always repeated
 
 As it turns out, however, it's no great trick to modify pure in-line code to replace loops that repeat a variable number of times, so long as you know the maximum number of times you'll ever want to repeat the loop. The basic concept is shown in Figure 13.11.
 
-![](images/fig13.11RT.png)
+![Description](../images/fig13.11RT.png)
+
+**Figure 13.11**
 
 The loop code is repeated in-line as many times as the maximum possible number of loop repetitions. Then the specified repetition count is used to jump right into the in-line code at the distance from the end of the in-line code that will produce the desired number of repetitions. This mechanism, known as *branched-to in-line code*, is almost startlingly simple, but powerful nonetheless.
 
 Let's convert the in-line code example of [Listing 13-20](#listing-13-20) to use branched-to in-line code. [Listing 13-23](#listing-13-23) shows this implementation. First, in-line code to support up to the maximum possible number of repetitions (in this case, 200) is created with `rept`. Then the start offset in the in-line code that will result in the desired number of repetitions is calculated, by multiplying the number of instruction bytes per repetition by the desired number of repetitions, and subtracting the result from the offset of the end of the table. As a result, [Listing 13-23](#listing-13-23) can handle any number of repetitions between 0 and 200, and does so with just one branch, the `jmp cx` that branches into the in-line code.
+
+#### Listing 13-23
+```nasm
+;
+; *** Listing 13-23 ***
+;
+; Zeros the high-bit of each byte in a 100-byte array,
+; using branched-to in-line code.
+;
+	jmp	Skip
+;
+MAXIMUM_ARRAY_LENGTH	equ	200
+ARRAY_LENGTH	equ	100
+ByteArray	label	byte
+	db	ARRAY_LENGTH dup (80h)
+;
+; Clears the high bit of each byte in an array.
+;
+; Input:
+;	BX = pointer to the start of the array to clear
+;	CX = number of bytes to clear (no greater than
+;		MAXIMUM_ARRAY_LENGTH)
+;
+; Output: none
+;
+; Registers altered: AX, BX, CX
+;
+ClearHighBits:
+;
+; Calculate the offset in the in-line code to which to jump
+; in order to get the desired number of repetitions.
+;
+	mov	al,InLineBitClearEnd-SingleRepetitionStart
+				;# of bytes per single
+				; repetition of
+				; AND [BX],AL/INC BX
+	mul	cl		;# of code bytes in the # of
+				; repetitions desired
+	mov	cx,offset InLineBitClearEnd
+	sub	cx,ax		;point back just enough
+				; instruction bytes from
+				; the end of the in-line
+				; code to perform the
+				; desired # of repetitions
+	mov	al,not 80h	;pattern to clear high bits
+				; with
+	jmp	cx		;finally, branch to perform
+				; the desired # of
+				; repetitions
+;
+; In-line code to clear the high bits of up to the maximum #
+; of bytes.
+;
+	rept	MAXIMUM_ARRAY_LENGTH-1
+				;maximum # of bytes to clear
+				; less 1
+	and	[bx],al		;clear the high bit of this
+				; byte
+	inc	bx		;point to the next byte
+	endm
+SingleRepetitionStart:		;a single repetition of the
+				; loop code, so we can
+				; calculate the length of
+				; a single repetition
+	and	[bx],dl		;clear the high bit of this
+		       		; byte
+	inc	bx     		;point to the next byte
+InLineBitClearEnd:
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	bx,offset ByteArray
+				;array in which to clear
+				; high bits
+	mov	cx,ARRAY_LENGTH	;# of bytes to clear
+				; (always less than
+				; MAXIMUM_ARRAY_LENGTH)
+	call	ClearHighBits	;clear the high bits of the
+				; bytes
+	call	ZTimerOff
+```
 
 The performance price for the flexibility of [Listing 13-23](#listing-13-23) is small; the code runs in 584 us, just 27 us slower than [Listing 13-20](#listing-13-20). Moreover, [Listing 13-23](#listing-13-23) could be speeded up a bit by multiplying by 3 with a shift-and-add sequence rather than the notoriously slow `mul` instruction; I used `mul` in order to illustrate the general case and because I didn't want to obscure the workings of branched-to in-line code.
 
@@ -694,6 +2299,62 @@ Let's go back to our familiar example of zeroing the high bit of each byte in an
 
 The key to [Listing 13-24](#listing-13-24) is that it performs four in-line bit-clears, then loops. This means that [Listing 13-24](#listing-13-24) loops just once for every four bits cleared. While that means that [Listing 13-24](#listing-13-24) still branches 25 times, that's 75 times fewer than the loop-only version, [Listing 13-19](#listing-13-19), certainly a vast improvement. And while the `ClearHighBits` subroutine is 13 bytes larger in [Listing 13-24](#listing-13-24) than in [Listing 13-19](#listing-13-19), it's nearly 300 bytes smaller than in the pure in-line version, [Listing 13-20](#listing-13-20). If [Listing 13-24](#listing-13-24) can run anywhere near as fast as [Listing 13-20](#listing-13-20), it'll be a winner.
 
+#### Listing 13-24
+```nasm
+;
+; *** Listing 13-24 ***
+;
+; Zeros the high-bit of each byte in a 100-byte array,
+; using partial in-line code.
+;
+	jmp	Skip
+;
+ARRAY_LENGTH	equ	100
+ByteArray	label	byte
+	db	ARRAY_LENGTH dup (80h)
+;
+; Clears the high bit of each byte in an array.
+;
+; Input:
+;	BX = pointer to the start of the array to clear
+;	CX = number of bytes to clear (must be a multiple
+;		of 4)
+;
+; Output: none
+;
+; Registers altered: AL, BX, CX
+;
+ClearHighBits:
+	mov	al,not 80h		;pattern to clear
+					; high bits with
+	shr	cx,1			;# of passes through
+	shr	cx,1			; partial in-line
+					; loop, which does
+					; 4 bytes at a pop
+ClearHighBitsLoop:
+	rept	4			;we'll put 4 bit-
+					; clears back to
+					; back, then loop
+	and	[bx],al			;clear the high bit
+					; of this byte
+	inc	bx			;point to the next
+					; byte
+	endm
+	loop	ClearHighBitsLoop
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	bx,offset ByteArray
+				;array in which to clear
+				; high bits
+	mov	cx,ARRAY_LENGTH	;# of bytes to clear
+				; (always a multiple of 4)
+	call	ClearHighBits	;clear the high bits of the
+				; bytes
+	call	ZTimerOff
+```
+
 [Listing 13-24](#listing-13-24) is indeed a winner, running in 688 us. That's certainly slower than pure in-line code—[Listing 13-20](#listing-13-20) is about 24% faster—but it's a whole lot faster than pure looping. [Listing 13-24](#listing-13-24) outperforms [Listing 13-19](#listing-13-19) by close to 50%—*at a cost of just 13 bytes*. That's a terrific return for the extra bytes expended, proportionally much better than the 83% improvement [Listing 13-20](#listing-13-20) brings at a cost of 295 bytes. To put it another way, in this example the performance improvement of partial in-line code over pure looping is about 49%, at a cost of 13 bytes, while the improvement of pure in-line code over partial in-line code is only 24%, at a cost of 282 bytes.
 
 If you need absolute maximum speed, in-line code is the ticket... but partial in-line code offers similar performance improvements in a far more generally usable form. If size is your driving concern, then `loop` is the way to go.
@@ -712,13 +2373,101 @@ As it turns out, that's not a problem. The flexibility of branched-to in-line co
 
 The basic principle when branching into partial in-line code is similar to that for standard branched-to in-line code. The key is still to branch to the location in the in-line code from which the desired number of repetitions will occur. The difference with branched-to partial in-line code is that the branching-to process only needs to handle any odd repetitions that can't be handled by a full loop, as shown in Figure 13.12.
 
-![](images/fig13.12RT.png)
+![Description](../images/fig13.12RT.png)
+
+**Figure 13.12**
 
 In other words, if partial in-line code performs *n* repetitions per loop and we want to perform *m* repetitions, the branching-to process only needs to handle *m* modulo *n* repetitions.
 
 For example, if we want to perform 15 repetitions with partial in-line code that performs 4 repetitions per loop, we need to branch so as to perform the first 15 modulo 4 = 3 repetitions during the first, partial pass through the loop. After that, 3 full passes through the loop will handle the other 12 repetitions.
 
 [Listing 13-25](#listing-13-25), a branched-to partial in-line code version of our familiar bit-clearing example, should help to make this clear. The version of `ClearHighBits` in [Listing 13-25](#listing-13-25) first calculates the number of repetitions modulo 4. Since each pass through the loop performs 4 repetitions, the number of repetitions modulo 4 is the number of repetitions to be performed on the first, partial pass through the loop in order to handle repetition counts that aren't multiples of 4. [Listing 13-25](#listing-13-25) then uses this value to calculate the offset in the partial in-line code to branch to in order to cause the correct number of repetitions to occur on that first pass.
+
+#### Listing 13-25
+```nasm
+;
+; *** Listing 13-25 ***
+;
+; Zeros the high-bit of each byte in a 100-byte array,
+; using branched-to partial in-line code.
+;
+	jmp	Skip
+;
+ARRAY_LENGTH	equ	100
+ByteArray	label	byte
+	db	ARRAY_LENGTH dup (80h)
+;
+; Clears the high bit of each byte in an array.
+;
+; Input:
+;	BX = pointer to the start of the array to clear
+;	CX = number of bytes to clear (0 means 0)
+;
+; Output: none
+;
+; Registers altered: AX, BX, CX, DX
+;
+ClearHighBits:
+;
+; Calculate the offset in the partial in-line code to which
+; to jump in order to perform CX modulo 4 repetitions (the
+; remaining repetitions will be handled by full passes
+; through the loop).
+;
+	mov	ax,cx
+	and	ax,3		;# of repetitions modulo 4
+	mov	dx,ax
+	shl	ax,1
+	add	ax,dx		;(# of reps modulo 4) * 3
+				; is the # of bytes from the
+				; the end of the partial
+				; in-line code to branch to
+				; in order to handle the
+				; # of repetitions that
+				; can't be handled in a full
+				; loop
+	mov	dx,offset InLineBitClearEnd
+	sub	dx,ax		;point back just enough
+				; instruction bytes from
+				; the end of the in-line
+				; code to perform the
+				; desired # of repetitions
+	shr	cx,1		;divide by 4, since we'll do
+	shr	cx,1		; 4 repetitions per loop
+	inc	cx		;account for the first,
+				; partial pass through the
+				; loop
+	mov	al,not 80h	;pattern to clear high bits
+				; with
+	jmp	dx		;finally, branch to perform
+				; the desired # of
+				; repetitions
+;
+; Partial in-line code to clear the high bits of 4 bytes per
+; pass through the loop.
+;
+ClearHighBitsLoop:
+	rept	4
+	and	[bx],al		;clear the high bit of this
+				; byte
+	inc	bx		;point to the next byte
+	endm
+InLineBitClearEnd:
+	loop	ClearHighBitsLoop
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	bx,offset ByteArray
+				;array in which to clear
+				; high bits
+	mov	cx,ARRAY_LENGTH	;# of bytes to clear
+				; (always less than
+				; MAXIMUM_ARRAY_LENGTH)
+	call	ClearHighBits	;clear the high bits of the
+				; bytes
+	call	ZTimerOff
+```
 
 Incidentally, multiplication by 3 in [Listing 13-25](#listing-13-25) is performed not with `mul`, but with a much faster shift-and-add sequence. As we mentioned earlier, the same could have been done in [Listing 13-23](#listing-13-23), but `mul` was used there in order to handle the general case and avoid obscuring the mechanics of the branching-to process. In the next chapter we'll see a jump-table-based approach that does away with the calculation of the target offset in the in-line code entirely, in favor of simply looking up the target address.
 
@@ -727,6 +2476,86 @@ Next, [Listing 13-25](#listing-13-25) divides the repetition count by 4, since 4
 [Listing 13-25](#listing-13-25), the branched-to partial in-line code, has an additional advantage over [Listing 13-23](#listing-13-23), the branched-to in-line code, and that's the ability to handle an array of *any* size up to 64 K-1. With in-line code, the largest number of repetitions that can be handled is determined by the number of times the code is physically repeated. Partial in-line code suffers from no such restriction, since it loops periodically. In fact, branched-to partial in-line code implementations can handle any case normal loops can handle, tend to be only a little larger, and are much faster for all but very small repetition counts.
 
 [Listing 13-25](#listing-13-25) itself isn't *quite* equivalent to a `loop`-based loop. Given an initial count of zero, `loop` performs 64 K repetitions, while [Listing 13-25](#listing-13-25) performs 0 repetitions in the same case. That's not necessarily a disadvantage; `loop`-based loops are often preceded with `jcxz` in order to cause zero counts to produce 0 repetitions. However, [Listing 13-25](#listing-13-25) can easily be modified to treat an initial count of zero as 64 K; I chose to perform 0 repetitions given a zero count in [Listing 13-25](#listing-13-25) only because it made for code that was easier to explain and understand. [Listing 13-26](#listing-13-26) shows the `ClearHighBits` subroutine of [Listing 13-25](#listing-13-25) modified to perform 64 K repetitions given an initial count of zero.
+
+#### Listing 13-26
+```nasm
+;
+; *** Listing 13-26 ***
+;
+; Replacement code for ClearHighBits in Listing 13-25.
+; This version performs 64K rather than 0 repetitions
+; when CX is 0.
+;----------------------------------------------------------
+; Clears the high bit of each byte in an array.
+;
+; Input:
+;	BX = pointer to the start of the array to clear
+;	CX = number of bytes to clear (0 means 64K)
+;
+; Output: none
+;
+; Registers altered: AX, BX, CX, DX
+;
+ClearHighBits:
+;
+; Calculate the offset in the partial in-line code to which
+; to jump in order to perform CX modulo 4 repetitions (the
+; remaining repetitions will be handled by full passes
+; through the loop).
+;
+	dec	cx	;# of reps - 1, since 1 to 4
+			; (rather than 0 to 3) repetitions
+			; are performed on the first,
+			; possibly partial pass through
+			; the loop
+			
+	mov	ax,cx
+	and	ax,3	;# of repetitions modulo 4
+	inc	ax	;(# of reps modulo 4)+1 in order to
+			; perform 1 to 4 repetitions on the
+			; first, possibly partial pass
+			; through the loop
+	mov	dx,ax
+	shl	ax,1
+	add	ax,dx	;(((# of reps - 1) modulo 4)+1)*3
+			; is the # of bytes from the
+			; the end of the partial
+			; in-line code to branch to
+			; in order to handle the
+			; # of repetitions that
+			; must be handled in the
+			; first, possibly partial
+			; loop
+	mov	dx,offset InLineBitClearEnd
+	sub	dx,ax	;point back just enough
+		     	; instruction bytes from
+		     	; the end of the in-line
+		     	; code to perform the
+		     	; desired # of repetitions
+	shr	cx,1 	;divide by 4, since we'll do
+	shr	cx,1 	; 4 repetitions per loop
+	inc	cx   	;account for the first,
+		     	; possibly partial pass
+		     	; through the loop
+	mov	al,not 80h
+			;pattern with which to clear
+			; high bits
+	jmp	dx	;finally, branch to perform
+			; the desired # of repetitions
+;
+; Partial in-line code to clear the high bits of 4 bytes per
+; pass through the loop.
+;
+ClearHighBitsLoop:
+	rept	4
+	and	[bx],al		;clear the high bit of this
+				; byte
+	inc	bx		;point to the next byte
+	endm
+InLineBitClearEnd:
+	loop	ClearHighBitsLoop
+	ret
+```
 
 It's worth noting that the `inc ax` in [Listing 13-26](#listing-13-26) could be eliminated if the line:
 
@@ -748,11 +2577,126 @@ By the way, there's nothing special about using 4 repetitions in partial in-line
 
 One case in which the poor repetition granularity of partial in-line code (that is, the inability of partial in-line loops to deal unaided with repetition counts that aren't exact multiples of the number of repetitions per partial in-line loop) causes no trouble at all is in handling zero-terminated strings. Since there is no preset repetition count for processing such strings, it doesn't matter in the least that the lengths of the strings won't always be multiples of the number of repetitions in a single partial in-line loop. When handling zero-terminated strings, it doesn't matter if the terminating condition occurs at the start of partial in-line code, the end, or somewhere in-between, since a conditional jump will branch out equally well from anywhere in partial in-line code. As a result, there's no need to branch into partial in-line code when handling zero-terminated strings.
 
-As usual, an example is the best explanation. Back in [Listing 11-25](#listing-11-25), we used `lodsw` and `scasw` inside a loop to find the first difference between two zero-terminated strings. We used word—rather than byte-sized string instructions to speed processing; interestingly, much of the improvement came not from accessing memory a word at a time but rather from cutting the number of loops in half, since two bytes were processed per loop. We're going to use partial in-line code to speed up [Listing 11-25](#listing-11-25) further by eliminating still more branches.
+As usual, an example is the best explanation. Back in [Listing 11-25](chapter-11.md#listing-11-25), we used `lodsw` and `scasw` inside a loop to find the first difference between two zero-terminated strings. We used word—rather than byte-sized string instructions to speed processing; interestingly, much of the improvement came not from accessing memory a word at a time but rather from cutting the number of loops in half, since two bytes were processed per loop. We're going to use partial in-line code to speed up [Listing 11-25](chapter-11.md#listing-11-25) further by eliminating still more branches.
 
-[Listing 13-27](#listing-13-27) is our partial in-line version of [Listing 11-25](#listing-11-25). I've chosen a repetition granularity of 8 repetitions per loop both for speed and to show you that granularities other than 4 can be used. There's no need to add code to branch into the partial in-line code, since there's no repetition count for a zero-terminated string. Note that I've separated the eighth repetition of the partial in-line code from the first seven, so that the eighth repetition can jump directly back to the top of the loop if it doesn't find the terminating zero. If I lumped all 8 repetitions together in a `rept` block, an unconditional jump would have to follow the partial in-line code in order to branch back to the top of the loop. While that would work, it would result in a conditional jump/unconditional jump pair... and well we know to steer clear of those when we're striving for top performance.
+[Listing 13-27](#listing-13-27) is our partial in-line version of [Listing 11-25](chapter-11.md#listing-11-25). I've chosen a repetition granularity of 8 repetitions per loop both for speed and to show you that granularities other than 4 can be used. There's no need to add code to branch into the partial in-line code, since there's no repetition count for a zero-terminated string. Note that I've separated the eighth repetition of the partial in-line code from the first seven, so that the eighth repetition can jump directly back to the top of the loop if it doesn't find the terminating zero. If I lumped all 8 repetitions together in a `rept` block, an unconditional jump would have to follow the partial in-line code in order to branch back to the top of the loop. While that would work, it would result in a conditional jump/unconditional jump pair... and well we know to steer clear of those when we're striving for top performance.
 
-[Listing 13-27](#listing-13-27) runs in 278 us, 10% faster than [Listing 11-25](#listing-11-25). Considering how heavily optimized [Listing 11-25](#listing-11-25) already was, what with the use of word-sized string instructions, that's a healthy improvement. What's more, [Listing 13-27](#listing-13-27) isn't markedly more complicated than [Listing 11-25](#listing-11-25); actually, the only difference is that the contents of the loop are repeated 8 times rather than once.
+#### Listing 13-27
+```nasm
+;
+; *** Listing 13-27 ***
+;
+; Determines whether two zero-terminated strings differ, and
+; if so where, using LODS/SCAS and partial in-line code.
+;
+	jmp	Skip
+;
+TestString1	label	byte
+	db	'This is a test string that is '
+	db	'z'
+	db	'terminated with a zero byte...',0
+TestString2	label	byte
+	db	'This is a test string that is '
+	db	'a'
+	db	'terminated with a zero byte...',0
+;
+; Compares two zero-terminated strings.
+;
+; Input:
+;	DS:SI = first zero-terminated string
+;	ES:DI = second zero-terminated string
+;
+; Output:
+;	DS:SI = pointer to first differing location in
+;		first string, or 0 if the byte wasn't found
+;	ES:DI = pointer to first differing location in
+;		second string, or 0 if the byte wasn't found
+;
+; Registers altered: AX, SI, DI
+;
+; Direction flag cleared
+;
+; Note: Does not handle strings that are longer than 64K
+;	bytes or cross segment boundaries.
+;
+CompareStrings:
+	cld
+CompareStringsLoop:
+;
+; First 7 repetitions of partial in-line code.
+;
+	rept	7
+	lodsw		;get the next 2 bytes
+	and	al,al	;is the first byte the terminating
+			; zero?
+	jz	CompareStringsFinalByte
+			;yes, so there's only one byte left
+			; to check
+	scasw		;compare this word
+	jnz	CompareStringsDifferent ;the strings differ
+	and	ah,ah	;is the second byte the terminating
+			; zero?
+	jz	CompareStringsSame
+			;yes, we've got a match
+	endm
+;
+; Final repetition of partial in-line code.
+;
+	lodsw		;get the next 2 bytes
+	and	al,al	;is the first byte the terminating
+			; zero?
+	jz	CompareStringsFinalByte
+			;yes, so there's only one byte left
+			; to check
+	scasw		;compare this word
+	jnz	CompareStringsDifferent ;the strings differ
+	and	ah,ah	;is the second byte the terminating
+			; zero?
+	jnz	CompareStringsLoop ;no, continue comparing
+			;the strings are the same
+CompareStringsSame:
+	sub	si,si	;return 0 pointers indicating that
+	mov	di,si	; the strings are identical
+	ret
+CompareStringsFinalByte:
+	scasb		;does the terminating zero match in
+			; the 2 strings?
+	jz	CompareStringsSame ;yes, the strings match
+	dec	si	;point back to the differing byte
+	dec	di	; in each string
+	ret
+CompareStringsDifferent:
+			;the strings are different, so we
+			; have to figure which byte in the
+			; word just compared was the first
+			; difference
+	dec	si
+	dec	si	;point back to the first byte of the
+	dec	di	; differing word in each string
+	dec	di
+	lodsb
+	scasb		;compare that first byte again
+	jz	CompareStringsDone
+			;if the first bytes are the same,
+			; then it must have been the second
+			; bytes that differed. That's where
+			; we're pointing, so we're done
+	dec	si	;the first bytes differed, so point
+	dec	di	; back to them
+CompareStringsDone:
+	ret
+;
+Skip:
+	call	ZTimerOn
+	mov	si,offset TestString1 ;point to one string
+	mov	di,seg TestString2
+	mov	es,di
+	mov	di,offset TestString2 ;point to other string
+	call	CompareStrings	;and compare the strings
+	call	ZTimerOff
+```
+
+[Listing 13-27](#listing-13-27) runs in 278 us, 10% faster than [Listing 11-25](chapter-11.md#listing-11-25). Considering how heavily optimized [Listing 11-25](chapter-11.md#listing-11-25) already was, what with the use of word-sized string instructions, that's a healthy improvement. What's more, [Listing 13-27](#listing-13-27) isn't markedly more complicated than [Listing 11-25](chapter-11.md#listing-11-25); actually, the only difference is that the contents of the loop are repeated 8 times rather than once.
 
 As you can see, partial in-line code is ideal for the handling of zero-terminated strings. Once again, partial in-line code is a poor man's `rep`; in fact, in string and similar applications, you might think of partial in-line code as a substitute for the sorely-missed `rep` prefix for the flexible but slow `lods`/`stos` and `lods`/`scas` instruction pairs.
 
