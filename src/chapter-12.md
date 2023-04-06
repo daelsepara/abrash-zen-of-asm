@@ -18,21 +18,46 @@ We want to avoid branching for one simple reason: it's slow. It's not that there
 
 So how slow *is* branching on the 8088? Well, the answer varies from one type of branch to another, so let's pick a commonly-used jump—say, `jmp`—and see what we find. The official execution time of `jmp` is 15 cycles. [Listing 12-1](#listing-12-1), which measures the performance of 1000 `jmp` instructions in a row, reports that `jmp` actually takes 3.77 us (18 cycles) to execute. ([Listing 12-1](#listing-12-1) actually uses `jmp short` rather than `jmp`, since the jumps don't cover much distance. We'll discuss the distinction between the two in a little while.)
 
+#### Listing 12-1
+```nasm
+;
+; *** Listing 12-1 ***
+;
+; Measures the performance of JMP.
+;
+	call	ZTimerOn
+	rept	1000
+	jmp	short $+2	;we'll do a short jump,
+				; since the next instruction
+				; can be reached with a
+				; 1-byte displacement
+	endm
+	call	ZTimerOff
+```
+
 18 cycles is a long time in anybody's book... long enough to copy a byte from one memory location to another and increment both SI and DI with `movsb`, long enough to add two 32-bit values together, long enough to increment a 16-bit register at least 4 times. How could it possibly take the 8088 so long just to load a value into the Instruction Pointer? (Think about it—all a branch really consists of is setting IP, and sometimes CS as well, to point to the desired instruction.) Well, let's round up the usual suspects—the cycle eaters—and figure out what's going on. In the process, we'll surely acquire some knowledge that we can put to good use in creating high-performance code.
 
 ## Branching and Calculation of the Target Address
 
 Of the 18 cycles `jmp` takes to execute in [Listing 12-1](#listing-12-1), 4 cycles seem to be used to calculate the target offset. I can't state this with absolute certainty, since Intel doesn't make the inner workings of its instructions public, but it's most likely true. You see, most of the 8088's `jmp` instructions don't have the form "load the Instruction Pointer with offset *xxxx*," where the `jmp` instruction specifies the exact offset to branch to. (This sort of jump is known as an *absolute* branch, since the destination offset is specified as a fixed, or absolute offset in the code segment. Figure 12.1 shows one of the few jump instructions that does use absolute branching.)
 
-![](images/fig12.1aRT.png)
+![Description](../images/fig12.1aRT.png)
 
-![](images/fig12.1bRT.png)
+**Figure 12.1a**
+
+![Description](../images/fig12.1bRT.png)
+
+**Figure 12.1b**
 
 Rather, most of the 8088's `jmp` instructions have the form "add *nnnn* to the contents of the Instruction Pointer," where the byte or word following the `jmp` opcode specifies the distance from the current IP to the offset to branch to, as shown in Figure 12.2.
 
-![](images/fig12.2aRT.png)
+![Description](../images/fig12.2aRT.png)
 
-![](images/fig12.2bRT.png)
+**Figure 12.2a**
+
+![Description](../images/fig12.2bRT.png)
+
+**Figure 12.2b**
 
 Jumps that use displacements are known as *relative* branches, since the destination offset is specified relative to the offset of the current instruction. Relative branches are actually performed by adding a displacement to the value in the Instruction Pointer, and there's a bit of a trick there.
 
@@ -44,9 +69,13 @@ There are definite advantages to the use of relative rather than absolute branch
 
 Second (and more important), when relative branches are used, any branch whose target is within -128 to +127 bytes of the byte after the end of the branching instruction can be specified in a more compact form, with a 1-byte rather than 1-word displacement, as shown in Figure 12.3.
 
-![](images/fig12.3aRT.png)
+![Description](../images/fig12.3aRT.png)
 
-![](images/fig12.3bRT.png)
+**Figure 12.3a**
+
+![Description](../images/fig12.3bRT.png)
+
+**Figure 12.3b**
 
 The key, of course, is that -128 to +127 decimal is equivalent to 0FF80h to 007Fh hexadecimal, which is the range of values that can be specified with a single signed byte. The short jumps to which I referred earlier are such 1-byte-displacement short branches, in contrast to normal jumps, which use full 2-byte displacements. The smaller displacement allows short jump instructions to squeeze into 2 bytes, 1 byte less than a normal jump.
 
@@ -70,7 +99,44 @@ Since the actual execution time of `jmp` in [Listing 12-1](#listing-12-1) is 3 c
 
 First, let's figure out the execution time of `imul` when used to calculate the 32-bit product of two 16-bit zero factors. Later, that will allow us to determine how much of the combined execution time of `imul` and `jmp` is due to `imul` alone. (By the way, we're using `imul` rather than `mul` because when I tried `mul` and `jmp` together, overall execution synchronized with DRAM refresh, distorting the results. Each `mul`/`jmp` pair executed in exactly 144 cycles, with DRAM refresh adding 6 of those cycles by holding up instruction fetching right after the jump. Here we have yet another example of why you should always time code in context—be careful about generalizing from artificial tests like [Listing 12-2](#listing-12-2)!) The Zen timer reports that the 1000 `imul` instructions in [Listing 12-2](#listing-12-2) execute in 26.82 ms, or 26.82 us (128 cycles) per `imul`.
 
+#### Listing 12-2
+```nasm
+;
+; *** Listing 12-2 ***
+;
+; Measures the performance of IMUL when used to calculate
+; the 32-bit product of two 16-bit factors each with a value
+; of zero.
+;
+	sub	ax,ax	;we'll multiply zero times zero
+	call	ZTimerOn
+	rept	1000
+	imul	ax
+	endm
+	call	ZTimerOff
+```
+
 Given that, we can determine how long `jmp` takes to execute when started with the prefetch queue full. [Listing 12-3](#listing-12-3), which measures the execution time of alternating `imul` and `jmp` instructions, runs in 31.18 ms. That's 31.18 us (148.8 cycles) per `imul`/`jmp` pair, or 20.8 cycles per `jmp`.
+
+#### Listing 12-3
+```nasm
+;
+; *** Listing 12-3 ***
+;
+; Measures the performance of JMP when the prefetch queue
+; is full when it comes time for each JMP to run.
+;
+	sub	ax,ax	;we'll multiply zero times zero
+	call	ZTimerOn
+	rept	1000
+	imul	ax	;let the prefetch queue fill
+	jmp	short $+2	;we'll do a short jump,
+				; since the next instruction
+				; is less than 127 bytes
+				; away
+	endm
+	call	ZTimerOff
+```
 
 *Wait one minute!* `jmp` takes more than 2 cycles *longer* when started with the prefetch queue full in [Listing 12-3](#listing-12-3) than it did in [Listing 12-1](#listing-12-1). Instructions don't slow down when the prefetch queue is allowed to fill before they start—if anything, they speed up. Yet a slowdown is just what we've found.
 
@@ -82,9 +148,13 @@ It's true that the prefetch queue is full when it comes time for each `jmp` to s
 
 We learned way back in Chapter 3 that the Bus Interface Unit of the 8088 reads the bytes immediately following the current instruction into the prefetch queue whenever the external data bus isn't otherwise in use. This is done in an attempt to anticipate the next few instruction-byte requests that the Execution Unit will issue. Every time that the EU requests an instruction byte and the BIU has guessed right by prefetching that byte, 4 cycles are saved that would otherwise have to be expended on fetching the requested byte while the EU waited, as shown in Figure 12.4.
 
-![](images/fig12.4aRT.png)
+![Description](../images/fig12.4aRT.png)
 
-![](images/fig12.4bRT.png)
+**Figure 12.4a**
+
+![Description](../images/fig12.4bRT.png)
+
+**Figure 12.4b**
 
 What happens if the BIU guesses wrong? Nothing disastrous: since the prefetched bytes are no help in fulfilling the EU's request, the requested instruction byte must be fetched from memory at a cost of 4 cycles, just as if prefetching had never occurred.
 
@@ -96,9 +166,13 @@ Think of it this way. The BIU prefetches bytes sequentially, starting with the b
 
 When a branch occurs, however, the bytes immediately following the instruction bytes for the branch instruction are no longer necessarily the next bytes the EU will want, as shown in Figure 12.5.
 
-![](images/fig12.5aRT.png)
+![Description](../images/fig12.5aRT.png)
 
-![](images/fig12.5bRT.png)
+**Figure 12.5a**
+
+![Description](../images/fig12.5bRT.png)
+
+**Figure 12.5b**
 
 If they aren't, the BIU has no choice but to throw away those bytes and start fetching bytes again at the location branched to. In other words, if the BIU gambles that the EU will request instruction bytes sequentially and loses that gamble because of a branch, all pending prefetches of the instruction bytes following the branch instruction in memory are wasted.
 
@@ -140,23 +214,65 @@ Although the execution time of each branch includes the 4 cycles required to fet
 
 Now, sometimes the prefetch queue doesn't eat a single additional cycle after a branching instruction fetches the first byte of the branched-to instruction. That happens when the 8088 doesn't need a second instruction byte for at least 4 cycles after the branch finishes, thereby giving the BIU enough time to fetch the second instruction byte. For example, consider [Listing 12-4](#listing-12-4), which shows `jmp` (actually, `jmp short`, but we'll just use "`jmp`" for simplicity) instructions alternating with `push ax` instructions.
 
+#### Listing 12-4
+```nasm
+;
+; *** Listing 12-4 ***
+;
+; Measures the performance of JMP when 1) the prefetch queue
+; is full when it comes time for each JMP to run and 2) the
+; prefetch queue is allowed to fill faster than the
+; instruction bytes after the JMP are requested by the EU,
+; so the EU doesn't have to wait for instruction bytes.
+;
+	call	ZTimerOn
+	rept	1000
+	push	ax	;let the prefetch queue fill while
+			; the first instruction byte after
+			; each branch executes
+	jmp	short $+2	;we'll do a short jump,
+				; since the next instruction
+				; is less than 127 bytes
+				; away
+	endm
+	call	ZTimerOff
+```
+
 What's interesting about `push ax` is that it's a 1-byte instruction that takes 15 cycles to execute but only accesses memory twice, using just 8 cycles in the process. That means that after each branch, in the time during which `push ax` executes, there are 7 cycles free for prefetching the instruction bytes of the next `jmp`. That's long enough to fetch the opcode byte for `jmp`, and most of the displacement byte as well, and when `jmp` starts to execute, the BIU can likely finish fetching the displacement byte before it's needed. In [Listing 12-4](#listing-12-4), in other words, the prefetch queue should never be empty either before or after `jmp` is executed, and that should make for faster execution.
 
 Incidentally, `push` is a good instruction to start a subroutine with, in light of the beneficial prefetch queue effects described above. Why? Because `push` allows the 8088 to recover partially from the emptying of the prefetch queue caused by subroutine calls. By happy chance, pushing registers in order to preserve them is a common way to start a subroutine.
 
 At any rate, let's try out our theories in the real world. [Listing 12-4](#listing-12-4) runs in 6704 ms, or 32 cycles per `push ax`/`jmp` pair. `push ax` officially runs in 15 cycles, and since it's a "prefetch-positive" instruction—the prefetch queue tends to be more full when `push ax` finishes than when `push ax` starts—15 cycles should prove to be the actual execution time as well. [Listing 12-5](#listing-12-5) confirms this, running in 3142 microseconds, or exactly 15 cycles per `push ax`.
 
+#### Listing 12-5
+```nasm
+;
+; *** Listing 12-5 ***
+;
+; Measures the performance of PUSH AX.
+;
+	call	ZTimerOn
+	rept	1000
+	push	ax
+	endm
+	call	ZTimerOff
+```
+
 A quick subtraction reveals that each `jmp` in [Listing 12-4](#listing-12-4) takes 17 cycles. That's 1 cycle better than the execution time of `jmp` in [Listing 12-1](#listing-12-1), and more than 3 cycles better than the execution time of `jmp` in [Listing 12-3](#listing-12-3), confirming our speculations about post-branch prefetching. It seems that we have indeed found the answer to the mystery of how `jmp` can run slower when the prefetch queue is allowed to fill before `jmp` is started: because the prefetch queue is emptied after a branch, one or more instructions following a branch can suffer from reduced performance at the hands of the prefetch queue cycle-eater. The fetch time for the first instruction byte after the branch is built into the branch, but not the fetch time for the second byte, or the bytes after that.
 
 So exactly what happens when [Listing 12-3](#listing-12-3) runs to slow performance by 3-plus cycles relative to [Listing 12-4](#listing-12-4)? I can only speculate, but it seems likely that when the first byte of an `imul` instruction is fetched, the EU is ready for the second byte of the `imul`—the *mod-reg-rm* byte—after just 1 cycle, as shown in Figure 12.6.
 
-![](images/fig12.6RT.png)
+![Description](../images/fig12.6RT.png)
+
+**Figure 12.6**
 
 After all, the EU can't do much processing of a multiplication until the source and destination are known, so it makes sense that the *mod-reg-rm* byte would be needed right away. Unfortunately, the branch preceding each `imul` in [Listing 12-3](#listing-12-3) empties the prefetch queue, so the EU must wait for several cycles while the *mod-reg-rm* byte is fetched from memory.
 
 In [Listing 12-4](#listing-12-4), on the other hand, the first byte fetched after each branch is the instruction byte for `push ax`. Since that's the only byte of the instruction, the EU can proceed right through to completion of the instruction without requiring additional instruction bytes, affording ample time for the BIU to fetch at least the first byte of the next `jmp`, as shown in Figure 12.7.
 
-![](images/fig12.7RT.png)
+![Description](../images/fig12.7RT.png)
+
+**Figure 12.7**
 
 As a result, the prefetch queue cycle-eater has little or no impact on the performance of this code.
 
