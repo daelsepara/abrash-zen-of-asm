@@ -1146,7 +1146,7 @@ CountNegPos:
 CountNegPosLoop:
 	lodsb		;get the next byte to check
 	and	al,al	;see if it's negative or
-			; non-negative 
+			; non-negative
 	js	CountNeg ;it's negative
 	inc	dx	;count off one non-negative element
 	jmp	short CountNegPosLoopBottom
@@ -1230,7 +1230,7 @@ CountNegPos:
 CountNegPosLoop:
 	lodsb		;get the next byte to check
 	and	al,al	;see if it's negative or
-			; non-negative 
+			; non-negative
 	js	CountNeg ;it's negative
 	inc	dx	;count off one non-negative element
 	loop	CountNegPosLoop
@@ -2508,7 +2508,7 @@ ClearHighBits:
 			; are performed on the first,
 			; possibly partial pass through
 			; the loop
-			
+
 	mov	ax,cx
 	and	ax,3	;# of repetitions modulo 4
 	inc	ax	;(# of reps modulo 4)+1 in order to

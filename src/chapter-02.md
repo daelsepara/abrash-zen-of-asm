@@ -105,7 +105,7 @@ IRR			equ	20h
 ; 80286 chips which allows interrupts to occur during a POPF even when
 ; interrupts remain disabled.
 ;
-MPOPF macro 
+MPOPF macro
 	local	p1, p2
 	jmp short p2
 p1:	iret			;jump to pushed address & pop flags
@@ -855,7 +855,7 @@ TIMER_COUNT		equ	46ch
 ; 80286 chips which allows interrupts to occur during a POPF even when
 ; interrupts remain disabled.
 ;
-MPOPF macro 
+MPOPF macro
 	local	p1, p2
 	jmp short p2
 p1:	iret			;jump to pushed address & pop flags
@@ -1062,7 +1062,7 @@ if PS2
 ; count from after the timer turned over. The result is a count
 ; that's 54 ms too long.
 ;
-				
+
 else
 
 ;
@@ -1209,7 +1209,7 @@ ReferenceZTimerOff proc	near
 	endm
 
 	mov	al,00000000b
-	out	MODE_8253,al		;latch timer 
+	out	MODE_8253,al		;latch timer
 ;
 ; Read the count and save it.
 ;

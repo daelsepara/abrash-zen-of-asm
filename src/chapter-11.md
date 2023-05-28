@@ -1783,7 +1783,7 @@ Skip:
 	mov	si,offset WordArray1	;point to the two
 	mov	di,ds			; arrays to be
 	mov	es,di			; compared
-	mov	di,offset WordArray2	
+	mov	di,offset WordArray2
 	mov	cx,ARRAY_LENGTH_IN_WORDS
 					;# of words to check
 	call	FindFirstDifference	;see if they differ
@@ -1863,7 +1863,7 @@ Skip:
 	mov	si,offset WordArray1	;point to the two
 	mov	di,ds			; arrays to be
 	mov	es,di			; compared
-	mov	di,offset WordArray2	
+	mov	di,offset WordArray2
 	mov	cx,ARRAY_LENGTH_IN_WORDS
 					;# of words to check
 	call	FindFirstDifference	;see if they differ
@@ -1934,7 +1934,7 @@ Skip:
 	mov	si,offset WordArray1	;point to the two
 	mov	di,ds			; arrays to be
 	mov	es,di			; compared
-	mov	di,offset WordArray2	
+	mov	di,offset WordArray2
 	mov	cx,ARRAY_LENGTH_IN_WORDS
 					;# of words to check
 	call	FindFirstDifference	;see if they differ
@@ -3402,7 +3402,7 @@ if DELAY
 endif
 	dec	[RepCount]	;animate again?
 	jnz	MainMoveAndDrawLoop ;yes
-; 
+;
 	call	ZTimerOff	;done timing
 ;
 ; Return to text mode.
@@ -3685,7 +3685,7 @@ if DELAY
 endif
 	dec	[RepCount]	;animate again?
 	jnz	MainMoveAndDrawLoop ;yes
-; 
+;
 	call	ZTimerOff	;done timing
 ;
 ; Return to text mode.

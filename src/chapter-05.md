@@ -3,7 +3,7 @@
 > When sorrows come, they come not single spies,
 >
 > But in battalions.
-> 
+>
 >—William Shakespeare, *Hamlet*
 
 Thus far we've explored what might be called the science of assembler programming. We've dissected in considerable detail the many factors that affect code performance, increasing our understanding of the PC greatly in the process. We've approached the whole business in a logical fashion, measuring 8 cycles here, accounting for 6 cycles there, always coming up with reasonable explanations for the phenomena we've observed. In short, we've acted as if assembler programming for the PC can be reduced to a well-understood, cut-and-dried cookbook discipline once we've learned enough.

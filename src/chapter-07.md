@@ -1152,7 +1152,7 @@ StripHighBits	proc	near
 				; inside the loop
 StripHighBitsLoop:
 	and	es:[bx],al	;strip this byte's high bit
-	inc	bx		;point to next byte 
+	inc	bx		;point to next byte
 	loop	StripHighBitsLoop
 	ret
 StripHighBits	endp
@@ -1205,7 +1205,7 @@ StripHighBits	proc	near
 				; inside the loop
 StripHighBitsLoop:
 	and	[bx],al		;strip this byte's high bit
-	inc	bx		;point to next byte 
+	inc	bx		;point to next byte
 	loop	StripHighBitsLoop
 	pop	ds		;restore normal DS
 	ret
@@ -1528,7 +1528,7 @@ Skip:
 SumArrayLoop:
 	add	al,[TestArray+bx+si] ;add in the next byte
 	adc	ah,dl		; to the 16-bit sum
-	inc	si		;point to next byte 
+	inc	si		;point to next byte
 	loop	SumArrayLoop
 	call	ZTimerOff
 ```
@@ -1566,7 +1566,7 @@ Skip:
 SumArrayLoop:
 	add	al,[bx+si]	;add in the next byte
 	adc	ah,dl		; to the 16-bit sum
-	inc	si		;point to next byte 
+	inc	si		;point to next byte
 	loop	SumArrayLoop
 	call	ZTimerOff
 ```
@@ -1602,7 +1602,7 @@ Skip:
 SumArrayLoop:
 	add	al,[bx]		;add in the next byte
 	adc	ah,dl		; to the 16-bit sum
-	inc	bx		;point to next byte 
+	inc	bx		;point to next byte
 	loop	SumArrayLoop
 	call	ZTimerOff
 ```
@@ -1889,7 +1889,7 @@ Skip:
 SumArrayLoop:
 	add	al,[bx]		;add in the next byte
 	adc	ah,0		; to the 16-bit sum
-	inc	bx		;point to next byte 
+	inc	bx		;point to next byte
 	loop	SumArrayLoop
 	call	ZTimerOff
 ```
@@ -1926,7 +1926,7 @@ Skip:
 SumArrayLoop:
 	add	al,[bx]		;add in the next byte
 	adc	ah,[MemZero]	; to the 16-bit sum
-	inc	bx		;point to next byte 
+	inc	bx		;point to next byte
 	loop	SumArrayLoop
 	call	ZTimerOff
 ```

@@ -573,8 +573,8 @@ ProcessingLoop:
 	sub	al,[si]		;subtract Array3 element
 	mov	[di],al		;store result in Array4
 	inc	dx		;point to next element of each array
-	inc	bx		
-	inc	si		
+	inc	bx
+	inc	si
 	inc	di
 	loop	ProcessingLoop	;do the next element
 	call	ZTimerOff

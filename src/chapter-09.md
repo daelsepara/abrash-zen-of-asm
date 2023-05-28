@@ -563,7 +563,7 @@ What all this means is that `cbw` and `cwd` are the preferred means of convertin
 ; *** Listing 9-14 ***
 ;
 ; An illustration of the use of CBW to convert an
-; array of unsigned byte values between 0 and 7Fh to an 
+; array of unsigned byte values between 0 and 7Fh to an
 ; array of unsigned words. Note that this would not work
 ; if Array1 contained values greater than 7Fh.
 ;
